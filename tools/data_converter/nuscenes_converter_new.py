@@ -207,7 +207,9 @@ def _fill_trainval_infos(nusc,
         pose_record = nusc.get('ego_pose', sd_rec['ego_pose_token'])
         lidar_path, boxes, _ = nusc.get_sample_data(lidar_token)
 
-        mmcv.check_file_exist(lidar_path)
+        if not osp.exists(lidar_path):
+            print(f'Warning: missing lidar file {lidar_path}, skip sample')
+            continue
         can_bus = _get_can_bus_info(nusc, nusc_can_bus, sample)
         ##
         info = {
