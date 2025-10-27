@@ -1,4 +1,4 @@
-timm
+timm==0.6.13
 open3d-python
 easydict
 fvcore
