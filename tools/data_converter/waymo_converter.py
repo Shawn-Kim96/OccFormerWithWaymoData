@@ -15,9 +15,83 @@ import numpy as np
 import tensorflow as tf
 from glob import glob
 from os.path import join
+from pathlib import Path
+import os
 from waymo_open_dataset.utils import range_image_utils, transform_utils
 from waymo_open_dataset.utils.frame_utils import \
     parse_range_image_and_camera_projection
+
+
+def create_imageset_files_for_waymo(kitti_format_dir):
+    """Create ImageSets split files for Waymo dataset after conversion.
+
+    This function collects all converted frame IDs and creates train.txt,
+    val.txt, and test.txt in the ImageSets directory.
+
+    Args:
+        kitti_format_dir (str): Path to kitti_format directory containing
+            training and testing subdirectories.
+    """
+    kitti_format_path = Path(kitti_format_dir)
+    imageset_dir = kitti_format_path / 'ImageSets'
+    mmcv.mkdir_or_exist(str(imageset_dir))
+
+    # Collect frame IDs from training directory
+    # Training directory contains both training (prefix 0) and validation (prefix 1) data
+    training_dir = kitti_format_path / 'training' / 'velodyne'
+    train_ids = []
+    val_ids = []
+
+    if training_dir.exists():
+        velodyne_files = sorted(glob(str(training_dir / '*.bin')))
+        for velo_file in velodyne_files:
+            frame_id = os.path.basename(velo_file).replace('.bin', '')
+            # Prefix 0 is for training, prefix 1 is for validation
+            if frame_id.startswith('0'):
+                train_ids.append(frame_id)
+            elif frame_id.startswith('1'):
+                val_ids.append(frame_id)
+
+    # Collect frame IDs from testing directory (prefix 2)
+    testing_dir = kitti_format_path / 'testing' / 'velodyne'
+    test_ids = []
+
+    if testing_dir.exists():
+        velodyne_files = sorted(glob(str(testing_dir / '*.bin')))
+        for velo_file in velodyne_files:
+            frame_id = os.path.basename(velo_file).replace('.bin', '')
+            test_ids.append(frame_id)
+
+    # Write train.txt
+    if train_ids:
+        with open(imageset_dir / 'train.txt', 'w') as f:
+            for frame_id in train_ids:
+                f.write(f'{frame_id}\n')
+        print(f'Created train.txt with {len(train_ids)} frames')
+
+    # Write val.txt
+    if val_ids:
+        with open(imageset_dir / 'val.txt', 'w') as f:
+            for frame_id in val_ids:
+                f.write(f'{frame_id}\n')
+        print(f'Created val.txt with {len(val_ids)} frames')
+    else:
+        # Create empty val.txt to avoid errors
+        with open(imageset_dir / 'val.txt', 'w') as f:
+            pass
+        print('Created empty val.txt')
+
+    # Write test.txt
+    if test_ids:
+        with open(imageset_dir / 'test.txt', 'w') as f:
+            for frame_id in test_ids:
+                f.write(f'{frame_id}\n')
+        print(f'Created test.txt with {len(test_ids)} frames')
+    else:
+        # Create empty test.txt to avoid errors
+        with open(imageset_dir / 'test.txt', 'w') as f:
+            pass
+        print('Created empty test.txt')
 
 
 class Waymo2KITTI(object):

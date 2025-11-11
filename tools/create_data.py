@@ -181,6 +181,12 @@ def waymo_data_prep(root_path,
             workers=workers,
             test_mode=(split == 'test'))
         converter.convert()
+
+    # Create ImageSets after all conversions are done
+    print('Creating ImageSets split files ...')
+    waymo.create_imageset_files_for_waymo(osp.join(out_dir, 'kitti_format'))
+    print('ImageSets created successfully.')
+
     # Generate waymo infos
     out_dir = osp.join(out_dir, 'kitti_format')
     kitti.create_waymo_info_file(out_dir, info_prefix, max_sweeps=max_sweeps)
