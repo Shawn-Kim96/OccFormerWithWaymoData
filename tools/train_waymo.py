@@ -166,8 +166,9 @@ def main():
         logger.info(f'Resume from: {cfg.resume_from}')
     logger.info('=' * 80)
 
-    # Log config
-    logger.info(f'Config:\n{cfg.pretty_text}')
+    # Log config (skip pretty_text to avoid yapf issues)
+    logger.info(f'Config file: {args.config}')
+    logger.info(f'Experiment config applied: {exp_config}')
 
     # Build datasets
     datasets = [build_dataset(cfg.data.train)]
