@@ -220,11 +220,11 @@ model = dict(
 
 # Dataset paths
 dataset_type = 'CustomWaymoDataset_T'
-data_root = 'data/waymo/kitti_format'
-ann_file_train = 'data/waymo/waymo_infos_train.pkl'
-ann_file_val = 'data/waymo/waymo_infos_val.pkl'
-pose_file = 'data/waymo/cam_infos.pkl'
-pose_file_val = 'data/waymo/cam_infos_vali.pkl'
+data_root = 'data/waymo_v1-3-1/kitti_format'
+ann_file_train = 'data/waymo_v1-3-1/occ3d_waymo/waymo_infos_train.pkl'
+ann_file_val = 'data/waymo_v1-3-1/occ3d_waymo/waymo_infos_val.pkl'
+pose_file = 'data/waymo_v1-3-1/occ3d_waymo/cam_infos.pkl'
+pose_file_val = 'data/waymo_v1-3-1/occ3d_waymo/cam_infos_vali.pkl'
 
 # Data augmentation
 bda_aug_conf = dict(
@@ -272,6 +272,7 @@ data = dict(
         type=dataset_type,
         data_root=data_root,
         ann_file=ann_file_train,
+        split='training',
         pose_file=pose_file,
         pipeline=train_pipeline,
         classes=class_names,
@@ -289,6 +290,7 @@ data = dict(
         type=dataset_type,
         data_root=data_root,
         ann_file=ann_file_val,
+        split='validation',
         pose_file=pose_file_val,
         pipeline=test_pipeline,
         classes=class_names,
@@ -303,6 +305,7 @@ data = dict(
         type=dataset_type,
         data_root=data_root,
         ann_file=ann_file_val,
+        split='validation',
         pose_file=pose_file_val,
         pipeline=test_pipeline,
         classes=class_names,
