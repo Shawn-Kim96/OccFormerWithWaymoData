@@ -25,6 +25,13 @@ from projects.mmdet3d_plugin.datasets.occ_metrics import Metric_FScore, Metric_m
 class CustomWaymoDataset_T(CustomWaymoDataset):
 
     CLASSES = ('Car', 'Pedestrian', 'Sign', 'Cyclist')
+    # Waymo occ evaluation classes (0-14) + free(15)
+    EVAL_CLASSES = [
+        'general_object', 'vehicle', 'pedestrian', 'sign', 'cyclist',
+        'traffic_light', 'pole', 'construction_cone', 'bicycle', 'motorcycle',
+        'building', 'vegetation', 'tree_trunk', 'road', 'walkable',
+        'free',
+    ]
 
     def __init__(self,
                  *args,
@@ -52,9 +59,10 @@ class CustomWaymoDataset_T(CustomWaymoDataset):
         self.length = self.length_waymo
         self.offset = offset
         # evaluation settings propagate to Metric_mIoU/FScore
+        # Fix eval classes to occupancy set (16 classes incl. free)
         self.evaluation_kwargs = dict(
-            class_names=self.CLASSES,
-            num_classes=len(self.CLASSES),
+            class_names=self.EVAL_CLASSES,
+            num_classes=len(self.EVAL_CLASSES),
             ignore_index=kwargs.pop('ignore_index', 255),
         )
         self.evaluation_kwargs.update(kwargs)
@@ -534,6 +542,9 @@ class CustomWaymoDataset_T(CustomWaymoDataset):
         if not occ_results:
             print('No evaluation results; skipping.')
             return {'waymo_SSC_mIoU': 0.0}
+        if len(occ_results) == 0:
+            print('No evaluation samples; skipping.')
+            return {'waymo_SSC_mIoU': 0.0}
         missing_keys = any(
             not isinstance(r, dict) or
             ('count_matrix' not in r or 'scene_id' not in r or 'frame_id' not in r)
@@ -546,9 +557,13 @@ class CustomWaymoDataset_T(CustomWaymoDataset):
             print('\nStarting Evaluation...')
             for index, occ_result in enumerate(tqdm(occ_results)):
                 CDist_tensor = occ_result.get('CDist_tensor', None)
-                count_matrix = occ_result['count_matrix']
-                scene_id = occ_result['scene_id']
-                frame_id = occ_result['frame_id']
+                count_matrix = occ_result.get('count_matrix', None)
+                if count_matrix is None:
+                    # Ensure we still accumulate something to surface IoU table/logs
+                    num_cls = self.evaluation_kwargs.get('num_classes', 0) or len(self.CLASSES)
+                    count_matrix = np.zeros((num_cls, num_cls), dtype=np.int64)
+                scene_id = occ_result.get('scene_id', -1)
+                frame_id = occ_result.get('frame_id', -1)
                 occ_eval_metrics.add_batch(CDist_tensor, count_matrix, scene_id, frame_id)
             occ_eval_metrics.print(runner=runner)
 

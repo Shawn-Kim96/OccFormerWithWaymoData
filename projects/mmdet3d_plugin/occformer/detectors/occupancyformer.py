@@ -243,44 +243,49 @@ class OccupancyFormer(BEVDepth):
         output['target_voxels'] = gt_occ
 
         # Build a simple confusion matrix for evaluation if gt_occ is provided
-        if gt_occ is not None:
-            num_classes = output_voxels.shape[0]
-            pred_labels = output_voxels.argmax(dim=0)
-            # squeeze any leading singleton dims
-            while pred_labels.dim() > 3 and pred_labels.shape[0] == 1:
-                pred_labels = pred_labels.squeeze(0)
+        num_classes_eval = 16  # occupancy classes 0-14 + free(15)
+        num_classes_logits = output_voxels.shape[0]
+        if num_classes_logits < num_classes_eval:
+            num_classes_eval = num_classes_logits
 
-            gt_labels = torch.as_tensor(gt_occ, device=output_voxels.device).float()
-            # Ensure gt shape is (N,C,D,H,W) for interpolate
+        pred_labels = output_voxels.argmax(dim=0)
+        while pred_labels.dim() > 3 and pred_labels.shape[0] == 1:
+            pred_labels = pred_labels.squeeze(0)
+
+        cm = torch.zeros((num_classes_eval, num_classes_eval), device=output_voxels.device, dtype=torch.long)
+
+        if gt_occ is not None:
+            gt_labels = torch.as_tensor(gt_occ, device=output_voxels.device)
+            # Map free label if still present
+            gt_labels = torch.where(gt_labels == 23, torch.tensor(15, device=gt_labels.device, dtype=gt_labels.dtype), gt_labels)
+            # Clamp labels outside eval range to ignore_index
+            gt_labels = torch.where((gt_labels < 0) | (gt_labels >= num_classes_eval), torch.tensor(255, device=gt_labels.device, dtype=gt_labels.dtype), gt_labels)
+
             if gt_labels.dim() == 3:
                 gt_labels = gt_labels.unsqueeze(0).unsqueeze(0)
             elif gt_labels.dim() == 4:
-                gt_labels = gt_labels.unsqueeze(1)  # N,C,D,H,W
+                gt_labels = gt_labels.unsqueeze(1)
             elif gt_labels.dim() == 5:
                 pass
             else:
                 raise ValueError(f'Unexpected gt_occ dim: {gt_labels.dim()}')
 
             if gt_labels.shape[2:] != pred_labels.shape:
-                gt_labels = F.interpolate(
-                    gt_labels,
-                    size=pred_labels.shape,
-                    mode='nearest')
+                gt_labels = F.interpolate(gt_labels.float(), size=pred_labels.shape, mode='nearest')
             gt_labels = gt_labels.squeeze(0).squeeze(0).long()
 
             gt_labels_flat = gt_labels.flatten()
             pred_labels_flat = pred_labels.flatten()
             ignore_index = 255
-            valid = (gt_labels_flat >= 0) & (gt_labels_flat < num_classes) & (gt_labels_flat != ignore_index)
+            valid = (gt_labels_flat >= 0) & (gt_labels_flat < num_classes_eval) & (gt_labels_flat != ignore_index)
             if valid.any():
                 cm = torch.bincount(
-                    (gt_labels_flat[valid] * num_classes + pred_labels_flat[valid]).long(),
-                    minlength=num_classes * num_classes).reshape(num_classes, num_classes)
-            else:
-                cm = torch.zeros((num_classes, num_classes), device=output_voxels.device, dtype=torch.long)
-            output['count_matrix'] = cm.cpu().numpy()
-            output['scene_id'] = img_metas[0].get('sample_idx', 0) // 1000
-            output['frame_id'] = img_metas[0].get('sample_idx', 0) % 1000
+                    (gt_labels_flat[valid] * num_classes_eval + pred_labels_flat[valid].clamp(max=num_classes_eval-1)).long(),
+                    minlength=num_classes_eval * num_classes_eval).reshape(num_classes_eval, num_classes_eval)
+
+        output['count_matrix'] = cm.cpu().numpy()
+        output['scene_id'] = img_metas[0].get('sample_idx', 0) // 1000
+        output['frame_id'] = img_metas[0].get('sample_idx', 0) % 1000
 
         # mmdet test API expects a list-like result per sample
         return [output]
