@@ -36,7 +36,10 @@ class CustomWaymoDataset_T(CustomWaymoDataset):
                  pose_file=None,
                  offset=0,
                  use_streaming=False,
+                 occ_root=None,
                  **kwargs):
+        self.occ_root = occ_root
+        self._occ_missing_warned = False
         with open(pose_file, 'rb') as f:
             pose_all = pickle.load(f)
             self.pose_all = pose_all
@@ -48,12 +51,46 @@ class CustomWaymoDataset_T(CustomWaymoDataset):
         self.load_interval_waymo = load_interval
         self.length = self.length_waymo
         self.offset = offset
-        self.evaluation_kwargs = kwargs
+        # evaluation settings propagate to Metric_mIoU/FScore
+        self.evaluation_kwargs = dict(
+            class_names=self.CLASSES,
+            num_classes=len(self.CLASSES),
+            ignore_index=kwargs.pop('ignore_index', 255),
+        )
+        self.evaluation_kwargs.update(kwargs)
         self.use_streaming = use_streaming
+        # stash common meta
+        self.occ_size = kwargs.get('occ_size', None)
+        self.point_cloud_range = kwargs.get('pc_range', None)
         super().__init__(*args, **kwargs)
+        # Align length with the actual annotation list in case it was filtered
+        if hasattr(self, 'data_infos_full'):
+            self.length_waymo = len(self.data_infos_full)
+            self.length = self.length_waymo
+        # Log a few missing-file issues to catch bad samples in validation
+        self._missing_log_limit = 5
+        self._missing_log_counters = dict(image=0, lidar=0, occ=0)
+        if self.occ_root is None:
+            if isinstance(self.ann_file, str):
+                self.occ_root = os.path.dirname(self.ann_file)
+            else:
+                self.occ_root = None
 
     def __len__(self):
-        return self.length_waymo // self.load_interval_waymo
+        # Guard against __len__ being called before data_infos_full is set by
+        # the parent constructor.
+        base_len = len(self.data_infos_full) if hasattr(self, 'data_infos_full') else \
+            (len(self.data_infos) if hasattr(self, 'data_infos') else 0)
+        return base_len // self.load_interval_waymo if getattr(self, 'load_interval_waymo', None) else base_len
+
+    @property
+    def num_views(self):
+        # Pipeline expects Ncams based on how many views we actually use
+        return getattr(self, '_num_views', 5)
+
+    @num_views.setter
+    def num_views(self, value):
+        self._num_views = value
 
     def __getitem__(self, idx):
         if self.test_mode:
@@ -87,11 +124,29 @@ class CustomWaymoDataset_T(CustomWaymoDataset):
             dict: Testing data dict of the corresponding index.
         """
 
-        index += self.offset
-        input_dict = self.get_data_info(index)
-        self.pre_pipeline(input_dict)
-        example = self.pipeline(input_dict)
-        return example
+        # Retry until we get a valid sample
+        max_try = len(self.data_infos_full)
+        tries = 0
+        while tries < max_try:
+            index = (index + self.offset) % len(self.data_infos_full)
+            input_dict = self.get_data_info(index)
+            if input_dict is None:
+                tries += 1
+                continue
+            self.pre_pipeline(input_dict)
+            example = self.pipeline(input_dict)
+            if example is None:
+                tries += 1
+                continue
+            return example
+        return None
+
+    def _get_pts_filename(self, idx):
+        """Resolve velodyne path; Waymo validation is also stored under training."""
+        primary = os.path.join(self.data_root, 'training', self.pts_prefix, f'{idx:07d}.bin')
+        if os.path.exists(primary):
+            return primary
+        return os.path.join(self.data_root, self.split, self.pts_prefix, f'{idx:07d}.bin')
     
     def get_input_idx(self, idx_list):
         '''
@@ -181,7 +236,11 @@ class CustomWaymoDataset_T(CustomWaymoDataset):
         Returns:
             queue (Dict): the single sample
         """
-        
+        # If pipeline outputs do not include 'img' (e.g., using img_inputs),
+        # just return the latest sample.
+        if 'img' not in queue[0]:
+            return queue[-1]
+
         # Step 1: 1. union the `img` tensor into a single tensor. 
         # 2. union the `img_metas` dict into a dict[dict]
         # 3. add prev_bev_exists and scene_token
@@ -261,8 +320,26 @@ class CustomWaymoDataset_T(CustomWaymoDataset):
                 intrinsics_rts.append(intrinsics)
                 sensor2ego_rts.append(sensor2ego)
 
+            missing_imgs = [p for p in image_paths if not os.path.exists(p)]
+            if missing_imgs:
+                if self._missing_log_counters['image'] < self._missing_log_limit:
+                    print_log(
+                        f'Missing image files for sample {sample_idx}: '
+                        f'{missing_imgs[:3]}',
+                        logger='root')
+                self._missing_log_counters['image'] += 1
+                return None
+
         # Step 5: get the pts filename by function `_get_pts_filename` in class `CustomWaymoDataset`
         pts_filename = self._get_pts_filename(sample_idx)
+        if not os.path.exists(pts_filename):
+            if self._missing_log_counters['lidar'] < self._missing_log_limit:
+                print_log(
+                    f'Missing point cloud file for sample {sample_idx}: '
+                    f'{pts_filename}',
+                    logger='root')
+            self._missing_log_counters['lidar'] += 1
+            return None
 
         # Step 6: pack the data info into a dict
         input_dict = dict(
@@ -280,15 +357,115 @@ class CustomWaymoDataset_T(CustomWaymoDataset):
             input_dict['ego2global'] = ego2global
             input_dict['global_to_curr_lidar_rt'] = np.linalg.inv(pose['ego2global'])
 
+        gt_occ = self._extract_occ_label(info, sample_idx)
+        if not self.test_mode and gt_occ is None:
+            if self._missing_log_counters['occ'] < self._missing_log_limit:
+                print_log(
+                    'gt_occ not found in info; please check occupancy preprocessing.',
+                    logger='root')
+            self._missing_log_counters['occ'] += 1
+            return None
+        input_dict['gt_occ'] = gt_occ
+
         # Step 7: get the annos info
         annos = self.get_ann_info(index)
         input_dict['ann_info'] = annos
+        input_dict['occ_size'] = getattr(self, 'occ_size', None)
+        input_dict['pc_range'] = getattr(self, 'point_cloud_range', None)
 
         # Step 8: get the can_bus info (In `waymo` dataset, we do not have can_bus info)
         can_bus = np.zeros(9)
         input_dict['can_bus'] = can_bus
 
         return input_dict
+
+    def _resolve_occ_path(self, occ_path):
+        if occ_path is None:
+            return None
+        candidates = []
+        if os.path.isabs(occ_path):
+            candidates.append(occ_path)
+        else:
+            candidates.append(occ_path)
+            if self.occ_root:
+                candidates.append(os.path.join(self.occ_root, occ_path))
+            candidates.append(os.path.join(self.data_root, occ_path))
+            if isinstance(self.ann_file, str):
+                candidates.append(os.path.join(os.path.dirname(self.ann_file), occ_path))
+        for cand in candidates:
+            if cand and os.path.exists(cand):
+                return cand
+        return candidates[0]
+
+    def _load_occ_from_path(self, occ_path, sample_idx):
+        resolved = self._resolve_occ_path(occ_path)
+        if resolved is None or not os.path.exists(resolved):
+            print_log(
+                f'Missing occupancy file for sample {sample_idx}: {resolved}',
+                logger='root')
+            return None
+        ext = os.path.splitext(resolved)[1].lower()
+        if ext == '.npz':
+            data = np.load(resolved)
+            for key in ['semantics', 'occupancy', 'voxel_semantics', 'data', 'arr_0']:
+                if key in data:
+                    return data[key]
+            return data[data.files[0]]
+        if ext in ['.npy', '.npz']:
+            return np.load(resolved)
+        try:
+            return np.load(resolved, allow_pickle=True)
+        except Exception:
+            return np.fromfile(resolved, dtype=np.uint8)
+
+    def _extract_occ_label(self, info, sample_idx):
+        candidates = [
+            info.get('gt_occ'),
+            info.get('occ_path'),
+            info.get('occ_gt_path'),
+            info.get('occupancy_path'),
+            info.get('occ_label_path'),
+            info.get('voxel_label_path'),
+        ]
+        value = next((c for c in candidates if c is not None), None)
+        if value is None:
+            for key, val in info.items():
+                if isinstance(val, (str, list, tuple)) and 'occ' in key.lower():
+                    value = val
+                    break
+        # Fallback: construct default path from sample_idx when occ path is missing
+        if value is None and self.occ_root is not None:
+            scene_idx = sample_idx % 1000000 // 1000
+            frame_idx = sample_idx % 1000
+            split_dir = 'training' if 'train' in str(self.split) else 'validation'
+            value = os.path.join(
+                self.occ_root,
+                split_dir,
+                f'{scene_idx:03d}',
+                f'{frame_idx:03d}_04.npz')
+        if value is None:
+            return None
+
+        def load_value(val):
+            if val is None:
+                return None
+            if isinstance(val, np.ndarray):
+                return val
+            if isinstance(val, (list, tuple)):
+                loaded = [load_value(v) for v in val]
+                return loaded
+            if isinstance(val, dict):
+                if 'path' in val:
+                    return load_value(val['path'])
+                for key in ['data', 'label', 'gt']:
+                    if key in val:
+                        return val[key]
+                return None
+            if isinstance(val, str):
+                return self._load_occ_from_path(val, sample_idx)
+            return None
+
+        return load_value(value)
 
     def get_ann_info(self, index):
         '''
@@ -354,6 +531,16 @@ class CustomWaymoDataset_T(CustomWaymoDataset):
         Returns: 
             None. `occ_eval_metrics.print()` will directly print the result to the terminal. 
         '''
+        if not occ_results:
+            print('No evaluation results; skipping.')
+            return {'waymo_SSC_mIoU': 0.0}
+        missing_keys = any(
+            not isinstance(r, dict) or
+            ('count_matrix' not in r or 'scene_id' not in r or 'frame_id' not in r)
+            for r in occ_results)
+        if missing_keys:
+            print('Evaluation skipped: required keys (count_matrix/scene_id/frame_id) missing.')
+            return {'waymo_SSC_mIoU': 0.0}
 
         def eval(occ_eval_metrics, runner=None):
             print('\nStarting Evaluation...')
@@ -368,14 +555,19 @@ class CustomWaymoDataset_T(CustomWaymoDataset):
         if "mIoU" in metric:
             # Step 1: initialize the `metric_mIoU`
             occ_eval_metrics = Metric_mIoU(**self.evaluation_kwargs)
-
             # Step 2: evaluate the results by `eval` function
             # Because we have move most calculation to `forward test` and directly return the `count_matrix`, the eval here will be fast. 
             eval(occ_eval_metrics, runner=runner)
+            metrics = occ_eval_metrics.compute_metric()
+            # Add alias for checkpointing key expected by config
+            if metrics:
+                metrics['waymo_SSC_mIoU'] = metrics.get('mIoU', 0.0)
+            return metrics if metrics else {'waymo_SSC_mIoU': 0.0}
 
         elif "FScore" in metric:
             occ_eval_metrics = Metric_FScore()
             eval(occ_eval_metrics)
+            return occ_eval_metrics.compute_metric()
 
         else:
             raise NotImplementedError

@@ -10,7 +10,7 @@ class CreateDepthFromLiDAR(object):
     def __init__(self, data_root=None, dataset='kitti'):
         self.data_root = data_root
         self.dataset = dataset
-        assert self.dataset in ['kitti', 'nusc']
+        assert self.dataset in ['kitti', 'nusc', 'waymo']  # Added waymo support
         
     def project_points(self, points, rots, trans, intrins, post_rots, post_trans):
         # from lidar to camera
@@ -18,10 +18,15 @@ class CreateDepthFromLiDAR(object):
         points = points - trans.view(1, -1, 3)
         inv_rots = rots.inverse().unsqueeze(0)
         points = (inv_rots @ points.unsqueeze(-1))
-        
+
         # the intrinsic matrix is [4, 4] for kitti and [3, 3] for nuscenes 
         if intrins.shape[-1] == 4:
-            points = torch.cat((points, torch.ones((points.shape[0], 1, 1, 1))), dim=2)
+            ones = torch.ones(
+                (points.shape[0], points.shape[1], 1, 1),
+                dtype=points.dtype,
+                device=points.device,
+            )
+            points = torch.cat((points, ones), dim=2)
             points = (intrins.unsqueeze(0) @ points).squeeze(-1)
         else:
             points = (intrins.unsqueeze(0) @ points).squeeze(-1)
@@ -36,18 +41,45 @@ class CreateDepthFromLiDAR(object):
         
         return points_uvd
 
+    def _read_lidar_points(self, file_path, fallback_img=None):
+        if not os.path.exists(file_path):
+            raise FileNotFoundError(f'Cannot locate LiDAR file for {fallback_img or file_path}')
+        points = np.fromfile(file_path, dtype=np.float32)
+        pts_dim = None
+        for candidate in (6, 5, 4):
+            if points.size % candidate == 0:
+                pts_dim = candidate
+                break
+        if pts_dim is None:
+            raise ValueError(f'Unexpected lidar feature dimension for file {file_path}')
+        points = points.reshape(-1, pts_dim)[..., :3]
+        return torch.from_numpy(points).float()
+
     def __call__(self, results):
         # loading LiDAR points
         if self.dataset == 'kitti':
-            img_filename = results['img_filename'][0]
-            seq_id, _, filename = img_filename.split("/")[-3:]
-            lidar_filename = os.path.join(self.data_root, 'data_velodyne/velodyne/sequences', 
-                            seq_id, "velodyne", filename.replace(".png", ".bin"))
-            lidar_points = np.fromfile(lidar_filename, dtype=np.float32).reshape(-1, 4)
-            lidar_points = torch.from_numpy(lidar_points[:, :3]).float()
+            pts_file = results.get('pts_filename', None)
+            if pts_file is not None and os.path.exists(pts_file):
+                lidar_points = self._read_lidar_points(pts_file)
+            else:
+                img_filename = results['img_filename'][0]
+                filename = os.path.basename(img_filename).replace(".png", ".bin")
+                seq_id = img_filename.split("/")[-3]
+                # Waymo KITTI-format layout: data_root/{training|validation}/velodyne
+                waymo_lidar = os.path.join(self.data_root, seq_id, 'velodyne', filename)
+                if os.path.exists(waymo_lidar):
+                    lidar_filename = waymo_lidar
+                else:
+                    # SemanticKITTI layout fallback
+                    lidar_filename = os.path.join(
+                        self.data_root,
+                        'data_velodyne/velodyne/sequences',
+                        seq_id,
+                        'velodyne',
+                        filename)
+                lidar_points = self._read_lidar_points(lidar_filename, fallback_img=img_filename)
         else:
-            lidar_points = np.fromfile(results['pts_filename'], dtype=np.float32, count=-1).reshape(-1, 5)[..., :3]
-            lidar_points = torch.from_numpy(lidar_points).float()
+            lidar_points = self._read_lidar_points(results['pts_filename'])
         
         # project LiDAR to monocular / multi-view images
         imgs, rots, trans, intrins, post_rots, post_trans = results['img_inputs'][:6]

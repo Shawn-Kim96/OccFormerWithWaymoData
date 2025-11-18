@@ -225,16 +225,65 @@ class OccupancyFormer(BEVDepth):
         
         # evaluate voxel 
         output_voxels = output['output_voxels'][0]
-        target_occ_size = img_metas[0]['occ_size']
-        
-        if (output_voxels.shape[-3:] != target_occ_size).any():
-            output_voxels = F.interpolate(output_voxels, size=tuple(target_occ_size), 
-                            mode='trilinear', align_corners=True)
+        target_occ_size = tuple(img_metas[0]['occ_size'])
+
+        # Ensure shape is (C, D, H, W); incoming may still carry batch dim
+        if output_voxels.dim() == 5:
+            output_voxels = output_voxels[0]
+
+        if output_voxels.shape[-3:] != target_occ_size:
+            output_voxels = F.interpolate(
+                output_voxels.unsqueeze(0),
+                size=target_occ_size,
+                mode='trilinear',
+                align_corners=True,
+            ).squeeze(0)
         
         output['output_voxels'] = output_voxels
         output['target_voxels'] = gt_occ
-        
-        return output
+
+        # Build a simple confusion matrix for evaluation if gt_occ is provided
+        if gt_occ is not None:
+            num_classes = output_voxels.shape[0]
+            pred_labels = output_voxels.argmax(dim=0)
+            # squeeze any leading singleton dims
+            while pred_labels.dim() > 3 and pred_labels.shape[0] == 1:
+                pred_labels = pred_labels.squeeze(0)
+
+            gt_labels = torch.as_tensor(gt_occ, device=output_voxels.device).float()
+            # Ensure gt shape is (N,C,D,H,W) for interpolate
+            if gt_labels.dim() == 3:
+                gt_labels = gt_labels.unsqueeze(0).unsqueeze(0)
+            elif gt_labels.dim() == 4:
+                gt_labels = gt_labels.unsqueeze(1)  # N,C,D,H,W
+            elif gt_labels.dim() == 5:
+                pass
+            else:
+                raise ValueError(f'Unexpected gt_occ dim: {gt_labels.dim()}')
+
+            if gt_labels.shape[2:] != pred_labels.shape:
+                gt_labels = F.interpolate(
+                    gt_labels,
+                    size=pred_labels.shape,
+                    mode='nearest')
+            gt_labels = gt_labels.squeeze(0).squeeze(0).long()
+
+            gt_labels_flat = gt_labels.flatten()
+            pred_labels_flat = pred_labels.flatten()
+            ignore_index = 255
+            valid = (gt_labels_flat >= 0) & (gt_labels_flat < num_classes) & (gt_labels_flat != ignore_index)
+            if valid.any():
+                cm = torch.bincount(
+                    (gt_labels_flat[valid] * num_classes + pred_labels_flat[valid]).long(),
+                    minlength=num_classes * num_classes).reshape(num_classes, num_classes)
+            else:
+                cm = torch.zeros((num_classes, num_classes), device=output_voxels.device, dtype=torch.long)
+            output['count_matrix'] = cm.cpu().numpy()
+            output['scene_id'] = img_metas[0].get('sample_idx', 0) // 1000
+            output['frame_id'] = img_metas[0].get('sample_idx', 0) % 1000
+
+        # mmdet test API expects a list-like result per sample
+        return [output]
 
     def post_process_semantic(self, pred_occ):
         if type(pred_occ) == list:

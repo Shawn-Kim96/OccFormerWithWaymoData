@@ -32,9 +32,9 @@ class LoadSemKittiAnnotation():
         return results
 
     def __call__(self, results):
-        if results['gt_occ'] is None:
+        if results.get('gt_occ', None) is None:
             return self.forward_test(results)
-        
+
         if type(results['gt_occ']) is list:
             gt_occ = [torch.tensor(x) for x in results['gt_occ']]
         else:

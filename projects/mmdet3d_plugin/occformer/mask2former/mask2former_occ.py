@@ -130,15 +130,10 @@ class Mask2FormerOccHead(MaskFormerHead):
             self.importance_sample_ratio = self.train_cfg.get(
                 'importance_sample_ratio', 0.75)
 
-        # create class_weights for semantic_kitti
-        self.class_weight = loss_cls.class_weight
+        # create class_weights for semantic_kitti (align exactly with num classes)
         kitti_class_weights = 1 / np.log(semantic_kitti_class_frequencies)
-        norm_kitti_class_weights = kitti_class_weights / kitti_class_weights[0]
-        norm_kitti_class_weights = norm_kitti_class_weights.tolist()
-        # append the class_weight for background
-        norm_kitti_class_weights.append(self.class_weight[-1])
+        norm_kitti_class_weights = (kitti_class_weights / kitti_class_weights[0]).tolist()
         self.class_weight = norm_kitti_class_weights
-        
         loss_cls.class_weight = self.class_weight
         
         # computing sampling weight        

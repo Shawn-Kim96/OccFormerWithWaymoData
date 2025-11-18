@@ -24,7 +24,10 @@ from mmdet3d.models import build_model
 from mmdet3d.utils import get_root_logger
 from mmcv.runner import init_dist
 from projects.configs.occformer_waymo.experiments import EXPERIMENTS, get_config
-
+from projects.mmdet3d_plugin.datasets import (
+    CustomWaymoDataset,
+    CustomWaymoDataset_T
+)
 
 def parse_args():
     parser = argparse.ArgumentParser(description='Train Waymo OccFormer')
@@ -93,6 +96,10 @@ def apply_experiment_config(cfg, exp_config):
     # Sample test mode
     if 'data_train_load_interval' in exp_config:
         cfg.data.train.load_interval = exp_config['data_train_load_interval']
+    if 'data_val_load_interval' in exp_config:
+        cfg.data.val.load_interval = exp_config['data_val_load_interval']
+    if 'data_test_load_interval' in exp_config:
+        cfg.data.test.load_interval = exp_config['data_test_load_interval']
     if 'evaluation_interval' in exp_config:
         cfg.evaluation.interval = exp_config['evaluation_interval']
 
@@ -191,7 +198,7 @@ def main():
         timestamp=timestamp,
         meta=dict(
             exp_name=args.exp_name,
-            config=cfg.pretty_text,
+            config_file=args.config,
         )
     )
 

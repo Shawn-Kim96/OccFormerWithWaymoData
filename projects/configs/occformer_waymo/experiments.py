@@ -5,6 +5,11 @@ from .waymo_base import *
 
 # Define all experiment variations
 EXPERIMENTS = {
+    'test': {
+        'lr': 1e-4,
+        'description': 'test'
+    },
+    
     # Baseline
     'baseline': {
         'lr': 1e-4,
@@ -170,8 +175,12 @@ def get_config(exp_name, sample_test=False):
 
     # Sample test mode
     if sample_test:
-        config['data_train_load_interval'] = 100  # Use 1/100 of data (~10 samples)
+        # Subsample aggressively for quick sanity checks
+        config['data_train_load_interval'] = 100  # train ~1/100
+        config['data_val_load_interval'] = 800    # val ≈10 samples (8069/800 ≈ 10)
+        config['data_test_load_interval'] = 800   # test ≈10 samples
         config['runner'] = dict(type='EpochBasedRunner', max_epochs=2)
+        # Disable eval/save-best for quick smoke test (outputs are dummy)
         config['evaluation_interval'] = 1
 
     return config, description

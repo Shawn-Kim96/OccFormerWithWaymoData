@@ -10,6 +10,10 @@ sync_bn = True
 plugin = True
 plugin_dir = "projects/mmdet3d_plugin/"
 
+# GPU and seed settings
+gpu_ids = [0, 1, 2, 3]  # Use 4 GPUs (list instead of range for config)
+seed = 0
+
 img_norm_cfg = dict(
     mean=[123.675, 116.28, 103.53], std=[58.395, 57.12, 57.375], to_rgb=True)
 
@@ -44,6 +48,8 @@ data_config = {
     'flip': True,
     'crop_h': (0.0, 0.0),
     'resize_test': 0.00,
+    'cams': ['image_0', 'image_1', 'image_2', 'image_3', 'image_4'],
+    'Ncams': 5,
 }
 
 grid_config = {
@@ -66,7 +72,7 @@ norm_cfg = dict(type='GN', num_groups=32, requires_grad=True)
 mask2former_num_queries = 100
 mask2former_feat_channel = voxel_out_channels
 mask2former_output_channel = voxel_out_channels
-mask2former_pos_channel = mask2former_feat_channel / 3
+mask2former_pos_channel = mask2former_feat_channel // 3  # Integer division
 mask2former_num_heads = voxel_out_channels // 32
 
 # Model architecture
@@ -126,7 +132,7 @@ model = dict(
                 attn_cfgs=dict(
                     type='MultiScaleDeformableAttention3D',
                     embed_dims=voxel_out_channels,
-                    num_heads=8,
+                    num_heads=6,
                     num_levels=3,
                     num_points=4,
                     im2col_step=64,
@@ -221,8 +227,8 @@ model = dict(
 # Dataset paths
 dataset_type = 'CustomWaymoDataset_T'
 data_root = 'data/waymo_v1-3-1/kitti_format'
-ann_file_train = 'data/waymo_v1-3-1/occ3d_waymo/waymo_infos_train.pkl'
-ann_file_val = 'data/waymo_v1-3-1/occ3d_waymo/waymo_infos_val.pkl'
+ann_file_train = 'data/waymo_v1-3-1/occ3d_waymo/waymo_infos_train.filtered.pkl'
+ann_file_val = 'data/waymo_v1-3-1/occ3d_waymo/waymo_infos_val.filtered.pkl'
 pose_file = 'data/waymo_v1-3-1/occ3d_waymo/cam_infos.pkl'
 pose_file_val = 'data/waymo_v1-3-1/occ3d_waymo/cam_infos_vali.pkl'
 
@@ -239,7 +245,7 @@ bda_aug_conf = dict(
 train_pipeline = [
     dict(type='LoadMultiViewImageFromFiles_SemanticKitti', is_train=True,
          data_config=data_config, img_norm_cfg=img_norm_cfg),
-    dict(type='CreateDepthFromLiDAR', data_root=data_root, dataset='kitti'),
+    dict(type='CreateDepthFromLiDAR', data_root=data_root, dataset='kitti'),  # Use 'kitti' for Waymo KITTI format
     dict(type='LoadSemKittiAnnotation', bda_aug_conf=bda_aug_conf,
          is_train=True, point_cloud_range=point_cloud_range),
     dict(type='OccDefaultFormatBundle3D', class_names=class_names),
@@ -252,7 +258,7 @@ test_pipeline = [
          data_config=data_config, img_norm_cfg=img_norm_cfg),
     dict(type='LoadSemKittiAnnotation', bda_aug_conf=bda_aug_conf,
          is_train=False, point_cloud_range=point_cloud_range),
-    dict(type='OccDefaultFormatBundle3D', class_names=class_names, with_label=False),
+    dict(type='OccDefaultFormatBundle3D', class_names=class_names, with_label=True),
     dict(type='Collect3D', keys=['img_inputs', 'gt_occ'],
          meta_keys=['pc_range', 'occ_size', 'sequence', 'frame_id', 'raw_img']),
 ]
@@ -267,7 +273,7 @@ input_modality = dict(
 # Data config
 data = dict(
     samples_per_gpu=1,
-    workers_per_gpu=4,
+    workers_per_gpu=0,  # Set to 0 to avoid multiprocessing issues
     train=dict(
         type=dataset_type,
         data_root=data_root,
@@ -285,6 +291,7 @@ data = dict(
         history_len=1,
         load_interval=1,
         withimage=True,
+        input_sample_policy=dict(type='normal'),  # Normal sampling policy
     ),
     val=dict(
         type=dataset_type,
@@ -300,6 +307,7 @@ data = dict(
         num_views=num_views,
         occ_size=occ_size,
         pc_range=point_cloud_range,
+        input_sample_policy=dict(type='normal'),  # Normal sampling policy
     ),
     test=dict(
         type=dataset_type,
@@ -315,6 +323,7 @@ data = dict(
         num_views=num_views,
         occ_size=occ_size,
         pc_range=point_cloud_range,
+        input_sample_policy=dict(type='normal'),  # Normal sampling policy
     ),
     shuffler_sampler=dict(type='DistributedGroupSampler'),
     nonshuffler_sampler=dict(type='DistributedSampler'),
