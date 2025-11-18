@@ -16,6 +16,16 @@ EXPERIMENTS = {
         'description': 'Baseline configuration',
     },
 
+    # Faster baseline (smaller data + shorter schedule)
+    'baseline_fast': {
+        'lr': 1e-4,
+        'data_train_load_interval': 10,  # use 1/10 train samples
+        'data_val_load_interval': 10,    # shrink val/test similarly
+        'data_test_load_interval': 10,
+        'runner': dict(type='EpochBasedRunner', max_epochs=30),
+        'description': 'Baseline with 1/10 data and 30 epochs (fast check)',
+    },
+
     # Learning rate variations
     'lr_5e5': {
         'lr': 5e-5,
@@ -176,7 +186,7 @@ def get_config(exp_name, sample_test=False):
     # Sample test mode
     if sample_test:
         # Subsample aggressively for quick sanity checks
-        config['data_train_load_interval'] = 100  # train ~1/100
+        config['data_train_load_interval'] = 10000  # train ~1/100
         config['data_val_load_interval'] = 800    # val ≈10 samples (8069/800 ≈ 10)
         config['data_test_load_interval'] = 800   # test ≈10 samples
         config['runner'] = dict(type='EpochBasedRunner', max_epochs=2)

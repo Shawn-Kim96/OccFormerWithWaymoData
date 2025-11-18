@@ -21,12 +21,24 @@ img_norm_cfg = dict(
 camera_used = [0, 1, 2, 3, 4]  # all 5 cameras
 num_views = 5
 
-# Class names
+# Class names (Waymo occ: 0-14 + free=15)
 class_names = [
-    'unlabeled', 'car', 'truck', 'bus', 'other-vehicle', 'pedestrian',
-    'bicyclist', 'motorcyclist', 'road', 'parking', 'sidewalk',
-    'other-ground', 'building', 'fence', 'vegetation', 'trunk', 'terrain',
-    'pole', 'traffic-sign',
+    'general_object',      # 0, TYPE_GENERALOBJECT
+    'vehicle',             # 1, TYPE_VEHICLE
+    'pedestrian',          # 2, TYPE_PEDESTRIAN
+    'sign',                # 3, TYPE_SIGN
+    'cyclist',             # 4, TYPE_CYCLIST
+    'traffic_light',       # 5, TYPE_TRAFFIC_LIGHT
+    'pole',                # 6, TYPE_POLE
+    'construction_cone',   # 7, TYPE_CONSTRUCTION_CONE
+    'bicycle',             # 8, TYPE_BICYCLE
+    'motorcycle',          # 9, TYPE_MOTORCYCLE
+    'building',            # 10, TYPE_BUILDING
+    'vegetation',          # 11, TYPE_VEGETATION
+    'tree_trunk',          # 12, TYPE_TREE_TRUNK
+    'road',                # 13, TYPE_ROAD
+    'walkable',            # 14, TYPE_WALKABLE
+    'free',                # 15, free space (GT 23 is remapped to 15)
 ]
 num_class = len(class_names)
 
@@ -189,7 +201,8 @@ model = dict(
             use_sigmoid=False,
             loss_weight=2.0,
             reduction='mean',
-            class_weight=[1.0] * num_class + [0.1]),
+            # class_weight must match num_occupancy_classes + background
+            class_weight=[1.0] * (num_class + 1)),
         loss_mask=dict(
             type='CrossEntropyLoss',
             use_sigmoid=True,
