@@ -5,11 +5,10 @@
 #SBATCH --error=results/%x/%x_%j.err
 #SBATCH --nodes=1
 #SBATCH --ntasks-per-node=1
-#SBATCH --gres=gpu:4
 #SBATCH --cpus-per-task=16
 #SBATCH --mem=64G
 #SBATCH --time=48:00:00
-#SBATCH --partition=your_partition
+#SBATCH --partition=gpuql
 
 # Usage: sbatch scripts/run_experiment.sh <exp_name> [sample_test]
 # Example: sbatch scripts/run_experiment.sh baseline
@@ -79,9 +78,11 @@ python -m torch.distributed.launch \
     --launcher pytorch \
     --deterministic \
     2>&1 | tee ${EXP_DIR}/logs/train_${SLURM_JOB_ID}.log
+# Capture exit status from pipe
+TRAIN_STATUS=${PIPESTATUS[0]}
 
 # Check training status
-if [ $? -eq 0 ]; then
+if [ ${TRAIN_STATUS} -eq 0 ]; then
     echo ""
     echo "========================================="
     echo "Training completed successfully!"
