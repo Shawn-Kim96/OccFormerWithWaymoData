@@ -23,6 +23,7 @@ EXPERIMENTS = {
         'data_val_load_interval': 10,    # shrink val/test similarly
         'data_test_load_interval': 10,
         'runner': dict(type='EpochBasedRunner', max_epochs=30),
+        'evaluation_interval': 0,        # disable val during training; eval later manually
         'description': 'Baseline with 1/10 data and 30 epochs (fast check)',
     },
 
@@ -30,13 +31,23 @@ EXPERIMENTS = {
     'lr_5e5': {
         'lr': 5e-5,
         'lr_config': dict(policy='step', step=[25, 28]),
+        'data_train_load_interval': 10,  # use 1/10 train samples
+        'data_val_load_interval': 10,    # shrink val/test similarly
+        'data_test_load_interval': 10,
+        'runner': dict(type='EpochBasedRunner', max_epochs=30),
+        'evaluation_interval': 0,        # disable val during training; eval later manually
         'description': 'Lower learning rate (5e-5)',
     },
 
-    'lr_2e4': {
-        'lr': 2e-4,
+    'lr_5e4': {
+        'lr': 5e-4,
         'lr_config': dict(policy='step', step=[15, 22]),
-        'description': 'Higher learning rate (2e-4)',
+        'data_train_load_interval': 10,  # use 1/10 train samples
+        'data_val_load_interval': 10,    # shrink val/test similarly
+        'data_test_load_interval': 10,
+        'runner': dict(type='EpochBasedRunner', max_epochs=30),
+        'evaluation_interval': 0,        # disable val during training; eval later manually
+        'description': 'Higher learning rate (5e-4)',
     },
 
     # Augmentation variations
@@ -56,6 +67,10 @@ EXPERIMENTS = {
             'crop_h': (0.0, 0.0),
             'resize_test': 0.00,
         },
+        'data_train_load_interval': 10,  # use 1/10 train samples
+        'data_val_load_interval': 10,    # shrink val/test similarly
+        'data_test_load_interval': 10,
+        'evaluation_interval': 0,        # disable val during training; eval later manually
         'runner': dict(type='EpochBasedRunner', max_epochs=35),
         'description': 'Strong data augmentation',
     },
@@ -77,6 +92,11 @@ EXPERIMENTS = {
             'resize_test': 0.00,
         },
         'description': 'Weak data augmentation',
+        'data_train_load_interval': 10,  # use 1/10 train samples
+        'data_val_load_interval': 10,    # shrink val/test similarly
+        'data_test_load_interval': 10,
+        'runner': dict(type='EpochBasedRunner', max_epochs=30),
+        'evaluation_interval': 0,        # disable val during training; eval later manually
     },
 
     # Model architecture variations
@@ -95,6 +115,11 @@ EXPERIMENTS = {
         'model_neck_in_channels': [32, 56, 160, 448, 1792],
         'samples_per_gpu': 2,
         'description': 'Smaller backbone (EfficientNet-B4)',
+        'data_train_load_interval': 10,  # use 1/10 train samples
+        'data_val_load_interval': 10,    # shrink val/test similarly
+        'data_test_load_interval': 10,
+        'runner': dict(type='EpochBasedRunner', max_epochs=30),
+        'evaluation_interval': 0,        # disable val during training; eval later manually
     },
 
     'resnet101': {
@@ -117,6 +142,11 @@ EXPERIMENTS = {
         'model_neck_upsample_strides': [0.5, 1, 2, 4],
         'lr': 5e-5,
         'description': 'ResNet-101 backbone',
+        'data_train_load_interval': 10,  # use 1/10 train samples
+        'data_val_load_interval': 10,    # shrink val/test similarly
+        'data_test_load_interval': 10,
+        'runner': dict(type='EpochBasedRunner', max_epochs=30),
+        'evaluation_interval': 0,        # disable val during training; eval later manually
     },
 
     # Training strategy variations
@@ -130,6 +160,11 @@ EXPERIMENTS = {
         ),
         'runner': dict(type='EpochBasedRunner', max_epochs=40),
         'description': 'Cosine learning rate schedule',
+        'data_train_load_interval': 10,  # use 1/10 train samples
+        'data_val_load_interval': 10,    # shrink val/test similarly
+        'data_test_load_interval': 10,
+        'runner': dict(type='EpochBasedRunner', max_epochs=30),
+        'evaluation_interval': 0,        # disable val during training; eval later manually
     },
 
     'sgd': {
@@ -147,6 +182,11 @@ EXPERIMENTS = {
             warmup_ratio=0.001,
         ),
         'description': 'SGD optimizer',
+        'data_train_load_interval': 10,  # use 1/10 train samples
+        'data_val_load_interval': 10,    # shrink val/test similarly
+        'data_test_load_interval': 10,
+        'runner': dict(type='EpochBasedRunner', max_epochs=30),
+        'evaluation_interval': 0,        # disable val during training; eval later manually
     },
 
     # Efficiency variation
@@ -154,6 +194,11 @@ EXPERIMENTS = {
         'mask2former_num_queries': 50,
         'samples_per_gpu': 2,
         'description': 'Reduced queries for efficiency',
+        'data_train_load_interval': 10,  # use 1/10 train samples
+        'data_val_load_interval': 10,    # shrink val/test similarly
+        'data_test_load_interval': 10,
+        'runner': dict(type='EpochBasedRunner', max_epochs=30),
+        'evaluation_interval': 0,        # disable val during training; eval later manually
     },
 }
 
