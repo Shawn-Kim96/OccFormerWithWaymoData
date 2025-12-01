@@ -15,6 +15,7 @@ def _format_rows(headers, rows):
     lines += [fmt_row(r) for r in rows]
     return "\n".join(lines)
 
+
 class Metric_mIoU:
     """Mean Intersection over Union metric for occupancy prediction"""
 

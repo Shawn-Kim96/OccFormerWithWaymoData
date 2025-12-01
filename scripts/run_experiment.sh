@@ -11,6 +11,9 @@
 #SBATCH --time=14-00:00:00
 =======
 #SBATCH --time=48:00:00
+<<<<<<< HEAD
+>>>>>>> 74934aa9c50c8e423dd9c698c49ac95958c35237
+=======
 >>>>>>> 74934aa9c50c8e423dd9c698c49ac95958c35237
 #SBATCH --partition=gpuql
 
