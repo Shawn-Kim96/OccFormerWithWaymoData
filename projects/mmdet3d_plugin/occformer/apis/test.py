@@ -15,6 +15,7 @@ import mmcv
 import numpy as np
 from fvcore.nn import parameter_count_table
 from projects.mmdet3d_plugin.utils import cm_to_ious, format_results, SSCMetrics
+from projects.mmdet3d_plugin.datasets.occ_metrics import Metric_mIoU
 
 # utils for saving predictions 
 from .utils import *
@@ -36,12 +37,20 @@ def custom_single_gpu_test(model, data_loader, show=False, out_dir=None, show_sc
     # evaluate ssc
     is_semkitti = hasattr(dataset, 'camera_used')
     ssc_metric = SSCMetrics().cuda()
+    occ_iou_metric = Metric_mIoU(
+        num_classes=len(getattr(dataset, 'EVAL_CLASSES', [])) or None,
+        class_names=getattr(dataset, 'EVAL_CLASSES', None),
+        ignore_index=None
+    )
     logger.info(parameter_count_table(model, max_depth=4))
     
     batch_size = 1
     for i, data in enumerate(data_loader):
         with torch.no_grad():
             result = model(return_loss=False, rescale=True, **data)
+            # Some detectors return a single-item list; unwrap for downstream dict access
+            if isinstance(result, list) and len(result) == 1:
+                result = result[0]
         
         # nusc lidar segmentation
         if 'evaluation_semantic' in result:
@@ -53,6 +62,13 @@ def custom_single_gpu_test(model, data_loader, show=False, out_dir=None, show_sc
             print(res_table)
         
         img_metas = data['img_metas'].data[0][0]
+        # accumulate occupancy confusion matrices if provided
+        if 'count_matrix' in result:
+            occ_iou_metric.add_batch(
+                count_matrix=result.get('count_matrix'),
+                scene_id=result.get('scene_id'),
+                frame_id=result.get('frame_id')
+            )
         # save for test submission
         if is_test_submission:
             if is_semkitti:
@@ -64,6 +80,23 @@ def custom_single_gpu_test(model, data_loader, show=False, out_dir=None, show_sc
         else:
             output_voxels = torch.argmax(result['output_voxels'], dim=1)
             target_voxels = result['target_voxels'].clone()
+            # Normalize shapes to (B, D, H, W)
+            if output_voxels.dim() == 3:
+                output_voxels = output_voxels.unsqueeze(0)
+            if target_voxels.dim() == 5 and target_voxels.shape[1] == 1:
+                target_voxels = target_voxels.squeeze(1)
+            if target_voxels.dim() == 3:
+                target_voxels = target_voxels.unsqueeze(0)
+            # If target ordering differs (B, H, W, D) -> (B, D, H, W)
+            if target_voxels.dim() == 4 and target_voxels.shape[1] != output_voxels.shape[1] \
+                    and target_voxels.shape[-1] == output_voxels.shape[1]:
+                target_voxels = target_voxels.permute(0, 3, 1, 2)
+            # Align spatial shape if still mismatched
+            if target_voxels.shape != output_voxels.shape:
+                target_voxels = torch.nn.functional.interpolate(
+                    target_voxels.unsqueeze(1).float(),
+                    size=output_voxels.shape[-3:],
+                    mode='nearest').squeeze(1).long()
             ssc_metric.update(y_pred=output_voxels,  y_true=target_voxels)
             
             # compute metrics
@@ -98,6 +131,11 @@ def custom_single_gpu_test(model, data_loader, show=False, out_dir=None, show_sc
     res = {
         'ssc_scores': ssc_metric.compute(),
     }
+    iou_metrics = occ_iou_metric.compute_metric()
+    if iou_metrics:
+        res['occ_iou'] = iou_metrics
+        # Pretty print per-class IoU
+        occ_iou_metric.print()
     
     if type(evaluation_semantic) is np.ndarray:
         res['evaluation_semantic'] = evaluation_semantic
@@ -146,11 +184,17 @@ def custom_multi_gpu_test(model, data_loader, tmpdir=None, gpu_collect=False, pr
     
     # evaluate lidarseg
     evaluation_semantic = 0
-    
+    occ_iou_metric = Metric_mIoU(
+        num_classes=len(getattr(dataset, 'EVAL_CLASSES', [])) or None,
+        class_names=getattr(dataset, 'EVAL_CLASSES', None),
+        ignore_index=None
+    )
     batch_size = 1
     for i, data in enumerate(data_loader):
         with torch.no_grad():
             result = model(return_loss=False, rescale=True, **data)
+            if isinstance(result, list) and len(result) == 1:
+                result = result[0]
         
         # nusc lidar segmentation
         if 'evaluation_semantic' in result:
@@ -167,12 +211,33 @@ def custom_multi_gpu_test(model, data_loader, tmpdir=None, gpu_collect=False, pr
                 save_nuscenes_lidarseg_submission(result['output_points'], test_save, img_metas)
         else:
             output_voxels = torch.argmax(result['output_voxels'], dim=1)
+            if output_voxels.dim() == 3:
+                output_voxels = output_voxels.unsqueeze(0)
             
             if result['target_voxels'] is not None:
                 target_voxels = result['target_voxels'].clone()
+                if target_voxels.dim() == 5 and target_voxels.shape[1] == 1:
+                    target_voxels = target_voxels.squeeze(1)
+                if target_voxels.dim() == 3:
+                    target_voxels = target_voxels.unsqueeze(0)
+                if target_voxels.dim() == 4 and target_voxels.shape[1] != output_voxels.shape[1] \
+                        and target_voxels.shape[-1] == output_voxels.shape[1]:
+                    target_voxels = target_voxels.permute(0, 3, 1, 2)
+                if target_voxels.shape != output_voxels.shape:
+                    target_voxels = torch.nn.functional.interpolate(
+                        target_voxels.unsqueeze(1).float(),
+                        size=output_voxels.shape[-3:],
+                        mode='nearest').squeeze(1).long()
                 ssc_results_i = ssc_metric.compute_single(
                     y_pred=output_voxels, y_true=target_voxels)
                 ssc_results.append(ssc_results_i)
+            
+            if 'count_matrix' in result:
+                occ_iou_metric.add_batch(
+                    count_matrix=result.get('count_matrix'),
+                    scene_id=result.get('scene_id'),
+                    frame_id=result.get('frame_id')
+                )
             
             if is_val_save_predictins:
                 if is_semkitti:
@@ -202,6 +267,11 @@ def custom_multi_gpu_test(model, data_loader, tmpdir=None, gpu_collect=False, pr
     
     res = {}
     res['ssc_results'] = collect_results_cpu(ssc_results, len(dataset), tmpdir)
+    iou_metrics = occ_iou_metric.compute_metric()
+    if iou_metrics:
+        res['occ_iou'] = iou_metrics
+        if rank == 0:
+            occ_iou_metric.print()
     
     if type(evaluation_semantic) is np.ndarray:
         # convert to tensor for reduce_sum
@@ -210,4 +280,3 @@ def custom_multi_gpu_test(model, data_loader, tmpdir=None, gpu_collect=False, pr
         res['evaluation_semantic'] = evaluation_semantic.cpu().numpy()
     
     return res
-

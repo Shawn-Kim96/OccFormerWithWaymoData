@@ -5,23 +5,49 @@ from .waymo_base import *
 
 # Define all experiment variations
 EXPERIMENTS = {
+    'test': {
+        'lr': 1e-4,
+        'description': 'test'
+    },
+    
     # Baseline
     'baseline': {
         'lr': 1e-4,
         'description': 'Baseline configuration',
     },
 
+    # Faster baseline (smaller data + shorter schedule)
+    'baseline_fast': {
+        'lr': 1e-4,
+        'data_train_load_interval': 10,  # use 1/10 train samples
+        'data_val_load_interval': 10,    # shrink val/test similarly
+        'data_test_load_interval': 10,
+        'runner': dict(type='EpochBasedRunner', max_epochs=30),
+        'evaluation_interval': 0,        # disable val during training; eval later manually
+        'description': 'Baseline with 1/10 data and 30 epochs (fast check)',
+    },
+
     # Learning rate variations
     'lr_5e5': {
         'lr': 5e-5,
         'lr_config': dict(policy='step', step=[25, 28]),
+        'data_train_load_interval': 10,  # use 1/10 train samples
+        'data_val_load_interval': 10,    # shrink val/test similarly
+        'data_test_load_interval': 10,
+        'runner': dict(type='EpochBasedRunner', max_epochs=30),
+        'evaluation_interval': 0,        # disable val during training; eval later manually
         'description': 'Lower learning rate (5e-5)',
     },
 
-    'lr_2e4': {
-        'lr': 2e-4,
+    'lr_5e4': {
+        'lr': 5e-4,
         'lr_config': dict(policy='step', step=[15, 22]),
-        'description': 'Higher learning rate (2e-4)',
+        'data_train_load_interval': 10,  # use 1/10 train samples
+        'data_val_load_interval': 10,    # shrink val/test similarly
+        'data_test_load_interval': 10,
+        'runner': dict(type='EpochBasedRunner', max_epochs=30),
+        'evaluation_interval': 0,        # disable val during training; eval later manually
+        'description': 'Higher learning rate (5e-4)',
     },
 
     # Augmentation variations
@@ -41,6 +67,10 @@ EXPERIMENTS = {
             'crop_h': (0.0, 0.0),
             'resize_test': 0.00,
         },
+        'data_train_load_interval': 10,  # use 1/10 train samples
+        'data_val_load_interval': 10,    # shrink val/test similarly
+        'data_test_load_interval': 10,
+        'evaluation_interval': 0,        # disable val during training; eval later manually
         'runner': dict(type='EpochBasedRunner', max_epochs=35),
         'description': 'Strong data augmentation',
     },
@@ -62,6 +92,11 @@ EXPERIMENTS = {
             'resize_test': 0.00,
         },
         'description': 'Weak data augmentation',
+        'data_train_load_interval': 10,  # use 1/10 train samples
+        'data_val_load_interval': 10,    # shrink val/test similarly
+        'data_test_load_interval': 10,
+        'runner': dict(type='EpochBasedRunner', max_epochs=30),
+        'evaluation_interval': 0,        # disable val during training; eval later manually
     },
 
     # Model architecture variations
@@ -80,6 +115,11 @@ EXPERIMENTS = {
         'model_neck_in_channels': [32, 56, 160, 448, 1792],
         'samples_per_gpu': 2,
         'description': 'Smaller backbone (EfficientNet-B4)',
+        'data_train_load_interval': 10,  # use 1/10 train samples
+        'data_val_load_interval': 10,    # shrink val/test similarly
+        'data_test_load_interval': 10,
+        'runner': dict(type='EpochBasedRunner', max_epochs=30),
+        'evaluation_interval': 0,        # disable val during training; eval later manually
     },
 
     'resnet101': {
@@ -102,6 +142,11 @@ EXPERIMENTS = {
         'model_neck_upsample_strides': [0.5, 1, 2, 4],
         'lr': 5e-5,
         'description': 'ResNet-101 backbone',
+        'data_train_load_interval': 10,  # use 1/10 train samples
+        'data_val_load_interval': 10,    # shrink val/test similarly
+        'data_test_load_interval': 10,
+        'runner': dict(type='EpochBasedRunner', max_epochs=30),
+        'evaluation_interval': 0,        # disable val during training; eval later manually
     },
 
     # Training strategy variations
@@ -115,6 +160,11 @@ EXPERIMENTS = {
         ),
         'runner': dict(type='EpochBasedRunner', max_epochs=40),
         'description': 'Cosine learning rate schedule',
+        'data_train_load_interval': 10,  # use 1/10 train samples
+        'data_val_load_interval': 10,    # shrink val/test similarly
+        'data_test_load_interval': 10,
+        'runner': dict(type='EpochBasedRunner', max_epochs=30),
+        'evaluation_interval': 0,        # disable val during training; eval later manually
     },
 
     'sgd': {
@@ -132,6 +182,11 @@ EXPERIMENTS = {
             warmup_ratio=0.001,
         ),
         'description': 'SGD optimizer',
+        'data_train_load_interval': 10,  # use 1/10 train samples
+        'data_val_load_interval': 10,    # shrink val/test similarly
+        'data_test_load_interval': 10,
+        'runner': dict(type='EpochBasedRunner', max_epochs=30),
+        'evaluation_interval': 0,        # disable val during training; eval later manually
     },
 
     # Efficiency variation
@@ -139,6 +194,11 @@ EXPERIMENTS = {
         'mask2former_num_queries': 50,
         'samples_per_gpu': 2,
         'description': 'Reduced queries for efficiency',
+        'data_train_load_interval': 10,  # use 1/10 train samples
+        'data_val_load_interval': 10,    # shrink val/test similarly
+        'data_test_load_interval': 10,
+        'runner': dict(type='EpochBasedRunner', max_epochs=30),
+        'evaluation_interval': 0,        # disable val during training; eval later manually
     },
 }
 
@@ -170,8 +230,12 @@ def get_config(exp_name, sample_test=False):
 
     # Sample test mode
     if sample_test:
-        config['data_train_load_interval'] = 100  # Use 1/100 of data (~10 samples)
+        # Subsample aggressively for quick sanity checks
+        config['data_train_load_interval'] = 10000  # train ~1/100
+        config['data_val_load_interval'] = 800    # val ≈10 samples (8069/800 ≈ 10)
+        config['data_test_load_interval'] = 800   # test ≈10 samples
         config['runner'] = dict(type='EpochBasedRunner', max_epochs=2)
+        # Disable eval/save-best for quick smoke test (outputs are dummy)
         config['evaluation_interval'] = 1
 
     return config, description

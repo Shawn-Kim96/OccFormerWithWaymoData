@@ -5,11 +5,14 @@
 #SBATCH --error=results/%x/%x_%j.err
 #SBATCH --nodes=1
 #SBATCH --ntasks-per-node=1
-#SBATCH --gres=gpu:4
 #SBATCH --cpus-per-task=16
 #SBATCH --mem=64G
+<<<<<<< HEAD
+#SBATCH --time=14-00:00:00
+=======
 #SBATCH --time=48:00:00
-#SBATCH --partition=your_partition
+>>>>>>> 74934aa9c50c8e423dd9c698c49ac95958c35237
+#SBATCH --partition=gpuql
 
 # Usage: sbatch scripts/run_experiment.sh <exp_name> [sample_test]
 # Example: sbatch scripts/run_experiment.sh baseline
@@ -56,6 +59,9 @@ fi
 # Build config file path
 CONFIG_FILE="projects/configs/occformer_waymo/waymo_base.py"
 
+# Determine how many GPUs SLURM gave us (fallback to 1)
+NPROC=${SLURM_GPUS_ON_NODE:-1}
+
 # Build training command
 TRAIN_ARGS="--work-dir ${EXP_DIR}/model --exp-name ${EXP_NAME}"
 
@@ -66,11 +72,12 @@ fi
 # Run training
 echo "Starting training at $(date)"
 echo "Config: ${CONFIG_FILE}"
+echo "GPUs detected: ${NPROC}"
 echo "Arguments: ${TRAIN_ARGS}"
 echo ""
 
 python -m torch.distributed.launch \
-    --nproc_per_node=4 \
+    --nproc_per_node=${NPROC} \
     --master_port=29500 \
     tools/train_waymo.py \
     ${CONFIG_FILE} \
@@ -79,9 +86,11 @@ python -m torch.distributed.launch \
     --launcher pytorch \
     --deterministic \
     2>&1 | tee ${EXP_DIR}/logs/train_${SLURM_JOB_ID}.log
+# Capture exit status from pipe
+TRAIN_STATUS=${PIPESTATUS[0]}
 
 # Check training status
-if [ $? -eq 0 ]; then
+if [ ${TRAIN_STATUS} -eq 0 ]; then
     echo ""
     echo "========================================="
     echo "Training completed successfully!"

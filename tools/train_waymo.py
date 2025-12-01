@@ -1,4 +1,3 @@
-#!/usr/bin/env python
 """
 Waymo Training Script with Experiment Management
 Supports:
@@ -24,7 +23,10 @@ from mmdet3d.models import build_model
 from mmdet3d.utils import get_root_logger
 from mmcv.runner import init_dist
 from projects.configs.occformer_waymo.experiments import EXPERIMENTS, get_config
-
+from projects.mmdet3d_plugin.datasets import (
+    CustomWaymoDataset,
+    CustomWaymoDataset_T
+)
 
 def parse_args():
     parser = argparse.ArgumentParser(description='Train Waymo OccFormer')
@@ -93,6 +95,10 @@ def apply_experiment_config(cfg, exp_config):
     # Sample test mode
     if 'data_train_load_interval' in exp_config:
         cfg.data.train.load_interval = exp_config['data_train_load_interval']
+    if 'data_val_load_interval' in exp_config:
+        cfg.data.val.load_interval = exp_config['data_val_load_interval']
+    if 'data_test_load_interval' in exp_config:
+        cfg.data.test.load_interval = exp_config['data_test_load_interval']
     if 'evaluation_interval' in exp_config:
         cfg.evaluation.interval = exp_config['evaluation_interval']
 
@@ -166,8 +172,9 @@ def main():
         logger.info(f'Resume from: {cfg.resume_from}')
     logger.info('=' * 80)
 
-    # Log config
-    logger.info(f'Config:\n{cfg.pretty_text}')
+    # Log config (skip pretty_text to avoid yapf issues)
+    logger.info(f'Config file: {args.config}')
+    logger.info(f'Experiment config applied: {exp_config}')
 
     # Build datasets
     datasets = [build_dataset(cfg.data.train)]
@@ -181,16 +188,23 @@ def main():
     model.init_weights()
 
     # Train model
+    # Disable validation if evaluation interval is non-positive
+    validate_flag = True
+    if cfg.get('evaluation', None):
+        interval = cfg.evaluation.get('interval', 1)
+        if interval <= 0:
+            validate_flag = False
+
     train_model(
         model,
         datasets,
         cfg,
         distributed=(args.launcher != 'none'),
-        validate=True,
+        validate=validate_flag,
         timestamp=timestamp,
         meta=dict(
             exp_name=args.exp_name,
-            config=cfg.pretty_text,
+            config_file=args.config,
         )
     )
 

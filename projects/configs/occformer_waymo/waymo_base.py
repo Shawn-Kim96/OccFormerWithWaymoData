@@ -10,6 +10,10 @@ sync_bn = True
 plugin = True
 plugin_dir = "projects/mmdet3d_plugin/"
 
+# GPU and seed settings
+gpu_ids = [0, 1, 2, 3]  # Use 4 GPUs (list instead of range for config)
+seed = 0
+
 img_norm_cfg = dict(
     mean=[123.675, 116.28, 103.53], std=[58.395, 57.12, 57.375], to_rgb=True)
 
@@ -17,12 +21,24 @@ img_norm_cfg = dict(
 camera_used = [0, 1, 2, 3, 4]  # all 5 cameras
 num_views = 5
 
-# Class names
+# Class names (Waymo occ: 0-14 + free=15)
 class_names = [
-    'unlabeled', 'car', 'truck', 'bus', 'other-vehicle', 'pedestrian',
-    'bicyclist', 'motorcyclist', 'road', 'parking', 'sidewalk',
-    'other-ground', 'building', 'fence', 'vegetation', 'trunk', 'terrain',
-    'pole', 'traffic-sign',
+    'general_object',      # 0, TYPE_GENERALOBJECT
+    'vehicle',             # 1, TYPE_VEHICLE
+    'pedestrian',          # 2, TYPE_PEDESTRIAN
+    'sign',                # 3, TYPE_SIGN
+    'cyclist',             # 4, TYPE_CYCLIST
+    'traffic_light',       # 5, TYPE_TRAFFIC_LIGHT
+    'pole',                # 6, TYPE_POLE
+    'construction_cone',   # 7, TYPE_CONSTRUCTION_CONE
+    'bicycle',             # 8, TYPE_BICYCLE
+    'motorcycle',          # 9, TYPE_MOTORCYCLE
+    'building',            # 10, TYPE_BUILDING
+    'vegetation',          # 11, TYPE_VEGETATION
+    'tree_trunk',          # 12, TYPE_TREE_TRUNK
+    'road',                # 13, TYPE_ROAD
+    'walkable',            # 14, TYPE_WALKABLE
+    'free',                # 15, free space (GT 23 is remapped to 15)
 ]
 num_class = len(class_names)
 
@@ -44,6 +60,8 @@ data_config = {
     'flip': True,
     'crop_h': (0.0, 0.0),
     'resize_test': 0.00,
+    'cams': ['image_0', 'image_1', 'image_2', 'image_3', 'image_4'],
+    'Ncams': 5,
 }
 
 grid_config = {
@@ -66,7 +84,7 @@ norm_cfg = dict(type='GN', num_groups=32, requires_grad=True)
 mask2former_num_queries = 100
 mask2former_feat_channel = voxel_out_channels
 mask2former_output_channel = voxel_out_channels
-mask2former_pos_channel = mask2former_feat_channel / 3
+mask2former_pos_channel = mask2former_feat_channel // 3  # Integer division
 mask2former_num_heads = voxel_out_channels // 32
 
 # Model architecture
@@ -126,7 +144,7 @@ model = dict(
                 attn_cfgs=dict(
                     type='MultiScaleDeformableAttention3D',
                     embed_dims=voxel_out_channels,
-                    num_heads=8,
+                    num_heads=6,
                     num_levels=3,
                     num_points=4,
                     im2col_step=64,
@@ -183,7 +201,8 @@ model = dict(
             use_sigmoid=False,
             loss_weight=2.0,
             reduction='mean',
-            class_weight=[1.0] * num_class + [0.1]),
+            # class_weight must match num_occupancy_classes + background
+            class_weight=[1.0] * (num_class + 1)),
         loss_mask=dict(
             type='CrossEntropyLoss',
             use_sigmoid=True,
@@ -220,11 +239,11 @@ model = dict(
 
 # Dataset paths
 dataset_type = 'CustomWaymoDataset_T'
-data_root = 'data/waymo/kitti_format'
-ann_file_train = 'data/waymo/waymo_infos_train.pkl'
-ann_file_val = 'data/waymo/waymo_infos_val.pkl'
-pose_file = 'data/waymo/cam_infos.pkl'
-pose_file_val = 'data/waymo/cam_infos_vali.pkl'
+data_root = 'data/waymo_v1-3-1/kitti_format'
+ann_file_train = 'data/waymo_v1-3-1/occ3d_waymo/waymo_infos_train.filtered.pkl'
+ann_file_val = 'data/waymo_v1-3-1/occ3d_waymo/waymo_infos_val.filtered.pkl'
+pose_file = 'data/waymo_v1-3-1/occ3d_waymo/cam_infos.pkl'
+pose_file_val = 'data/waymo_v1-3-1/occ3d_waymo/cam_infos_vali.pkl'
 
 # Data augmentation
 bda_aug_conf = dict(
@@ -237,9 +256,9 @@ bda_aug_conf = dict(
 
 # Pipelines
 train_pipeline = [
-    dict(type='LoadMultiViewImageFromFiles_SemanticKitti', is_train=True,
+    dict(type='LoadMultiViewImageFromFiles_OccFormer', is_train=True,
          data_config=data_config, img_norm_cfg=img_norm_cfg),
-    dict(type='CreateDepthFromLiDAR', data_root=data_root, dataset='kitti'),
+    dict(type='CreateDepthFromLiDAR', data_root=data_root, dataset='kitti'),  # Use 'kitti' for Waymo KITTI format
     dict(type='LoadSemKittiAnnotation', bda_aug_conf=bda_aug_conf,
          is_train=True, point_cloud_range=point_cloud_range),
     dict(type='OccDefaultFormatBundle3D', class_names=class_names),
@@ -248,11 +267,11 @@ train_pipeline = [
 ]
 
 test_pipeline = [
-    dict(type='LoadMultiViewImageFromFiles_SemanticKitti', is_train=False,
+    dict(type='LoadMultiViewImageFromFiles_OccFormer', is_train=False,
          data_config=data_config, img_norm_cfg=img_norm_cfg),
     dict(type='LoadSemKittiAnnotation', bda_aug_conf=bda_aug_conf,
          is_train=False, point_cloud_range=point_cloud_range),
-    dict(type='OccDefaultFormatBundle3D', class_names=class_names, with_label=False),
+    dict(type='OccDefaultFormatBundle3D', class_names=class_names, with_label=True),
     dict(type='Collect3D', keys=['img_inputs', 'gt_occ'],
          meta_keys=['pc_range', 'occ_size', 'sequence', 'frame_id', 'raw_img']),
 ]
@@ -267,11 +286,12 @@ input_modality = dict(
 # Data config
 data = dict(
     samples_per_gpu=1,
-    workers_per_gpu=4,
+    workers_per_gpu=0,  # Set to 0 to avoid multiprocessing issues
     train=dict(
         type=dataset_type,
         data_root=data_root,
         ann_file=ann_file_train,
+        split='training',
         pose_file=pose_file,
         pipeline=train_pipeline,
         classes=class_names,
@@ -284,11 +304,13 @@ data = dict(
         history_len=1,
         load_interval=1,
         withimage=True,
+        input_sample_policy=dict(type='normal'),  # Normal sampling policy
     ),
     val=dict(
         type=dataset_type,
         data_root=data_root,
         ann_file=ann_file_val,
+        split='validation',
         pose_file=pose_file_val,
         pipeline=test_pipeline,
         classes=class_names,
@@ -298,11 +320,13 @@ data = dict(
         num_views=num_views,
         occ_size=occ_size,
         pc_range=point_cloud_range,
+        input_sample_policy=dict(type='normal'),  # Normal sampling policy
     ),
     test=dict(
         type=dataset_type,
         data_root=data_root,
         ann_file=ann_file_val,
+        split='validation',
         pose_file=pose_file_val,
         pipeline=test_pipeline,
         classes=class_names,
@@ -312,6 +336,7 @@ data = dict(
         num_views=num_views,
         occ_size=occ_size,
         pc_range=point_cloud_range,
+        input_sample_policy=dict(type='normal'),  # Normal sampling policy
     ),
     shuffler_sampler=dict(type='DistributedGroupSampler'),
     nonshuffler_sampler=dict(type='DistributedSampler'),

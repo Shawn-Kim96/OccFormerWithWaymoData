@@ -6,6 +6,7 @@
 import argparse
 import mmcv
 import os
+import sys
 import torch
 import warnings
 from mmcv import Config, DictAction
@@ -13,6 +14,12 @@ from mmcv.cnn import fuse_conv_bn
 from mmcv.parallel import MMDataParallel, MMDistributedDataParallel
 from mmcv.runner import (get_dist_info, init_dist, load_checkpoint,
                          wrap_fp16_model)
+
+# Ensure the repo root (which contains the `projects` package) is importable
+CURRENT_DIR = os.path.dirname(os.path.abspath(__file__))
+PROJECT_ROOT = os.path.abspath(os.path.join(CURRENT_DIR, os.pardir))
+if PROJECT_ROOT not in sys.path:
+    sys.path.insert(0, PROJECT_ROOT)
 
 from mmdet3d.apis import single_gpu_test
 from mmdet3d.datasets import build_dataset
@@ -32,7 +39,7 @@ def parse_args():
     parser.add_argument('config', help='test config file path')
     parser.add_argument('checkpoint', help='checkpoint file')
     parser.add_argument('--out', help='output result file in pickle format')
-    
+
     parser.add_argument('--test-save', default=None, help='the path for saving \
                     predictions for test submission')
 
@@ -56,7 +63,7 @@ def parse_args():
     parser.add_argument('--show', action='store_true', help='show results')
     parser.add_argument('--pred-save', default=None, help='the path for saving \
                     predictions for validation and visualization')
-    
+
     parser.add_argument(
         '--show-dir', help='directory where results will be saved')
     parser.add_argument(
@@ -208,7 +215,7 @@ def main():
         #nonshuffler_sampler=cfg.data.nonshuffler_sampler,
         # shuffler_sampler=cfg.data.shuffler_sampler,
     )
-    
+
     # build the model and load checkpoint
     cfg.model.train_cfg = None
     model = build_model(cfg.model, test_cfg=cfg.get('test_cfg'))
@@ -233,14 +240,14 @@ def main():
 
     if not distributed:
         model = MMDataParallel(model, device_ids=[0])
-        outputs = custom_single_gpu_test(model, data_loader, 
+        outputs = custom_single_gpu_test(model, data_loader,
                     args.show, args.show_dir, pred_save=args.pred_save, test_save=args.test_save)
     else:
         model = MMDistributedDataParallel(
             model.cuda(),
             device_ids=[torch.cuda.current_device()],
             broadcast_buffers=False)
-        outputs = custom_multi_gpu_test(model, data_loader, 
+        outputs = custom_multi_gpu_test(model, data_loader,
                     args.tmpdir, args.gpu_collect, pred_save=args.pred_save, test_save=args.test_save)
 
     rank, _ = get_dist_info()
@@ -249,11 +256,11 @@ def main():
             print(f'\nwriting results to {args.out}')
             assert False
             #mmcv.dump(outputs['bbox_results'], args.out)
-        
+
         kwargs = {} if args.eval_options is None else args.eval_options
         kwargs['jsonfile_prefix'] = osp.join('test', args.config.split(
             '/')[-1].split('.')[-2], time.ctime().replace(' ', '_').replace(':', '_'))
-        
+
         if args.format_only:
             dataset.format_results(outputs, **kwargs)
 

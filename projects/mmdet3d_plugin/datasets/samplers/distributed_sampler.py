@@ -24,7 +24,11 @@ class DistributedSampler(_DistributedSampler):
         if self.shuffle:
             assert False
         else:
-            indices = torch.arange(len(self.dataset)).tolist()
+            dataset_len = len(self.dataset)
+            if dataset_len == 0:
+                # Empty dataset guard: return empty iterator to avoid div0
+                return iter([])
+            indices = torch.arange(dataset_len).tolist()
 
         # add extra samples to make it evenly divisible
         # in case that indices is shorter than half of total_size

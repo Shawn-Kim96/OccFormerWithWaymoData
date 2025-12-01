@@ -32,13 +32,20 @@ class LoadSemKittiAnnotation():
         return results
 
     def __call__(self, results):
-        if results['gt_occ'] is None:
+        if results.get('gt_occ', None) is None:
             return self.forward_test(results)
-        
+
         if type(results['gt_occ']) is list:
             gt_occ = [torch.tensor(x) for x in results['gt_occ']]
         else:
             gt_occ = torch.tensor(results['gt_occ'])
+
+        # Remap labels: Waymo free space is 23 in GT, map to 15 as described in README
+        # Any label outside model's num_classes will later be ignored (255) in eval.
+        if torch.is_tensor(gt_occ):
+            gt_occ = torch.where(gt_occ == 23, torch.tensor(15, dtype=gt_occ.dtype), gt_occ)
+        else:
+            gt_occ = [torch.where(x == 23, torch.tensor(15, dtype=x.dtype), x) for x in gt_occ]
         
         if self.is_train:
             rotate_bda, scale_bda, flip_dx, flip_dy, flip_dz = self.sample_bda_augmentation()

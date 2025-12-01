@@ -179,7 +179,7 @@ def voxel_transform(voxel_labels, rotate_angle, scale_ratio, flip_dx, flip_dy, f
     # apply transformation to the 3D volume, which is tensor of shape [X, Y, Z]
     if voxel_labels is not None:
         voxel_labels = voxel_labels.numpy().astype(np.uint8)
-        if not np.isclose(rotate_degree, 0):
+        if abs(rotate_degree) > 0.01:  # Use explicit threshold to avoid floating point errors
             '''
             Currently, we use a naive method for 3D rotation because we found the visualization of 
             rotate results with scipy is strange: 
