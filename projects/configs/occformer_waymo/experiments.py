@@ -200,6 +200,51 @@ EXPERIMENTS = {
         'runner': dict(type='EpochBasedRunner', max_epochs=30),
         'evaluation_interval': 0,        # disable val during training; eval later manually
     },
+
+    # ===== IMPROVED EXPERIMENTS WITH FIXES =====
+
+    'improved_baseline': {
+        'lr': 1e-4,
+        'description': 'Fixed baseline: resize GT to model size + focal loss',
+        'data_train_load_interval': 10,  # Keep 10% for memory constraints
+        'data_val_load_interval': 10,
+        'data_test_load_interval': 10,
+        'runner': dict(type='EpochBasedRunner', max_epochs=40),
+        'evaluation_interval': 5,  # Evaluate every 5 epochs
+        # Use Waymo-specific loading with resizing
+        'use_waymo_loader': True,
+        'target_occ_size': [256, 256, 32],  # Resize GT to match model
+        # Use focal loss for class imbalance
+        'use_focal_loss': True,
+    },
+
+    'improved_fast': {
+        'lr': 1e-4,
+        'description': 'Fast improved version with all fixes',
+        'data_train_load_interval': 10,
+        'data_val_load_interval': 10,
+        'data_test_load_interval': 10,
+        'runner': dict(type='EpochBasedRunner', max_epochs=30),
+        'evaluation_interval': 0,  # Disable during training, eval manually
+        'use_waymo_loader': True,
+        'target_occ_size': [256, 256, 32],
+        'use_focal_loss': True,
+    },
+
+    'improved_small_grid': {
+        'lr': 1e-4,
+        'description': 'Use native GT size (200,200,16) - more memory efficient',
+        'data_train_load_interval': 10,
+        'data_val_load_interval': 10,
+        'data_test_load_interval': 10,
+        'runner': dict(type='EpochBasedRunner', max_epochs=35),
+        'evaluation_interval': 5,
+        # Keep GT size, change model to match
+        'use_waymo_loader': True,
+        'target_occ_size': None,  # Don't resize, use (200,200,16)
+        'occ_size': [200, 200, 16],  # Override model config
+        'use_focal_loss': True,
+    },
 }
 
 

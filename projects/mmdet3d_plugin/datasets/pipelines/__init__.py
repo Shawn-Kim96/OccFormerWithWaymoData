@@ -1,6 +1,8 @@
 # load kitti
 from .loading_kitti_imgs import LoadMultiViewImageFromFiles_SemanticKitti
 from .loading_kitti_occ import LoadSemKittiAnnotation
+# load waymo
+from .loading_waymo_occ import LoadWaymoOccAnnotation
 # load nusc
 from .loading_nusc_imgs import LoadMultiViewImageFromFiles_OccFormer
 from .loading_nusc_occ import LoadNuscOccupancyAnnotations
