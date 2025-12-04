@@ -256,7 +256,7 @@ bda_aug_conf = dict(
 
 # Pipelines
 train_pipeline = [
-    dict(type='LoadMultiViewImageFromFiles_SemanticKitti', is_train=True,
+    dict(type='LoadMultiViewImageFromFiles_OccFormer', is_train=True,
          data_config=data_config, img_norm_cfg=img_norm_cfg),
     dict(type='CreateDepthFromLiDAR', data_root=data_root, dataset='kitti'),  # Use 'kitti' for Waymo KITTI format
     dict(type='LoadSemKittiAnnotation', bda_aug_conf=bda_aug_conf,
@@ -267,7 +267,7 @@ train_pipeline = [
 ]
 
 test_pipeline = [
-    dict(type='LoadMultiViewImageFromFiles_SemanticKitti', is_train=False,
+    dict(type='LoadMultiViewImageFromFiles_OccFormer', is_train=False,
          data_config=data_config, img_norm_cfg=img_norm_cfg),
     dict(type='LoadSemKittiAnnotation', bda_aug_conf=bda_aug_conf,
          is_train=False, point_cloud_range=point_cloud_range),

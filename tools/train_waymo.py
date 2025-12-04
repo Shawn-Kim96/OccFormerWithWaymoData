@@ -1,4 +1,3 @@
-#!/usr/bin/env python
 """
 Waymo Training Script with Experiment Management
 Supports:

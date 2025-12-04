@@ -284,6 +284,8 @@ class CustomWaymoDataset_T(CustomWaymoDataset):
         '''
 
         # Step 1: get the data info
+        if index >= len(self.data_infos_full):
+            return None
         info = self.data_infos_full[index]
         
         # Step 2: get the image file name and idx
