@@ -103,6 +103,54 @@ def apply_experiment_config(cfg, exp_config):
     if 'evaluation_interval' in exp_config:
         cfg.evaluation.interval = exp_config['evaluation_interval']
 
+    # ===== NEW: Improved experiment configs =====
+
+    # Use Waymo-specific loader with resizing
+    if exp_config.get('use_waymo_loader', False):
+        target_size = exp_config.get('target_occ_size', [256, 256, 32])
+
+        # Update train pipeline
+        for i, step in enumerate(cfg.train_pipeline):
+            if step['type'] == 'LoadSemKittiAnnotation':
+                cfg.train_pipeline[i] = dict(
+                    type='LoadWaymoOccAnnotation',
+                    bda_aug_conf=step.get('bda_aug_conf', cfg.bda_aug_conf),
+                    is_train=step.get('is_train', True),
+                    point_cloud_range=step.get('point_cloud_range', cfg.point_cloud_range),
+                    target_occ_size=target_size,
+                    resize_method='nearest'
+                )
+
+        # Update test pipeline
+        for i, step in enumerate(cfg.test_pipeline):
+            if step['type'] == 'LoadSemKittiAnnotation':
+                cfg.test_pipeline[i] = dict(
+                    type='LoadWaymoOccAnnotation',
+                    bda_aug_conf=step.get('bda_aug_conf', cfg.bda_aug_conf),
+                    is_train=step.get('is_train', False),
+                    point_cloud_range=step.get('point_cloud_range', cfg.point_cloud_range),
+                    target_occ_size=target_size,
+                    resize_method='nearest'
+                )
+
+    # Override occ_size if specified (for small grid experiments)
+    if 'occ_size' in exp_config:
+        cfg.occ_size = exp_config['occ_size']
+        cfg.data.train.occ_size = exp_config['occ_size']
+        cfg.data.val.occ_size = exp_config['occ_size']
+        cfg.data.test.occ_size = exp_config['occ_size']
+
+    # Use focal loss for class imbalance
+    if exp_config.get('use_focal_loss', False):
+        cfg.model.pts_bbox_head.loss_cls = dict(
+            type='OccupancyFocalLoss',
+            gamma=2.5,
+            reduction='mean',
+            loss_weight=2.0,
+            ignore_index=255,
+            num_classes=len(cfg.class_names)
+        )
+
     return cfg
 
 
@@ -189,12 +237,19 @@ def main():
     model.init_weights()
 
     # Train model
+    # Disable validation if evaluation interval is non-positive
+    validate_flag = True
+    if cfg.get('evaluation', None):
+        interval = cfg.evaluation.get('interval', 1)
+        if interval <= 0:
+            validate_flag = False
+
     train_model(
         model,
         datasets,
         cfg,
         distributed=(args.launcher != 'none'),
-        validate=True,
+        validate=validate_flag,
         timestamp=timestamp,
         meta=dict(
             exp_name=args.exp_name,

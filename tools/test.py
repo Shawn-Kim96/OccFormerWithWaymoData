@@ -6,6 +6,7 @@
 import argparse
 import mmcv
 import os
+import sys
 import torch
 import warnings
 from mmcv import Config, DictAction
@@ -13,6 +14,12 @@ from mmcv.cnn import fuse_conv_bn
 from mmcv.parallel import MMDataParallel, MMDistributedDataParallel
 from mmcv.runner import (get_dist_info, init_dist, load_checkpoint,
                          wrap_fp16_model)
+
+# Ensure the repo root (which contains the `projects` package) is importable
+CURRENT_DIR = os.path.dirname(os.path.abspath(__file__))
+PROJECT_ROOT = os.path.abspath(os.path.join(CURRENT_DIR, os.pardir))
+if PROJECT_ROOT not in sys.path:
+    sys.path.insert(0, PROJECT_ROOT)
 
 from mmdet3d.apis import single_gpu_test
 from mmdet3d.datasets import build_dataset
