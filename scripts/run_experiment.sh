@@ -7,14 +7,7 @@
 #SBATCH --ntasks-per-node=1
 #SBATCH --cpus-per-task=16
 #SBATCH --mem=64G
-<<<<<<< HEAD
 #SBATCH --time=14-00:00:00
-=======
-#SBATCH --time=48:00:00
-<<<<<<< HEAD
->>>>>>> 74934aa9c50c8e423dd9c698c49ac95958c35237
-=======
->>>>>>> 74934aa9c50c8e423dd9c698c49ac95958c35237
 #SBATCH --partition=gpuql
 
 # Usage: sbatch scripts/run_experiment.sh <exp_name> [sample_test]
