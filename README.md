@@ -1,73 +1,160 @@
-# OccFormer: Dual-path Transformer for Vision-based 3D Semantic Occupancy Prediction
+# Waymo Fine-tuning Quick Start Guide
 
-## News
+## IMPORTANT: Pretrained Weights (HPC has no internet!)
 
-- **[2023/04/20]** Update more pretrained weights.
-- **[2023/04/12]** Paper is on [Arxiv](https://arxiv.org/abs/2304.05316).
-- **[2023/04/11]** Code and demo release.
+**Run this BEFORE uploading to HPC:**
 
-## Introduction
-The vision-based perception for autonomous driving has undergone a transformation from the bird-eye-view (BEV) representations to the 3D semantic occupancy. Compared with the BEV planes, the 3D semantic occupancy further provides structural information along the vertical direction. This paper presents OccFormer, a dual-path transformer network to effectively process the 3D volume for semantic occupancy prediction. OccFormer achieves a long-range, dynamic, and efficient encoding of the camera-generated 3D voxel features. It is obtained by decomposing the heavy 3D processing into the local and global transformer pathways along the horizontal plane. For the occupancy decoder, we adapt the vanilla Mask2Former for 3D semantic occupancy by proposing preserve-pooling and class-guided sampling, which notably mitigate the sparsity and class imbalance. Experimental results demonstrate that OccFormer significantly outperforms existing methods for semantic scene completion on SemanticKITTI dataset and for LiDAR semantic segmentation on nuScenes dataset.
-
-![framework](./assets/framework.jpg)
-
-## Demo
-
-### nuScenes:
-![demo](./assets/nusc_snippet.gif)
-![legend](./assets/nusc_legend.png)
-
-### SemanticKITTI:
-![demo](./assets/kitti_snippet.gif)
-
-## Benchmark Results
-LiDAR Segmentation on nuScenes test set:
-![nusc_test](./assets/nusc_test.jpg)
-Semantic Scene Completion on SemanticKITTI test set:
-![kitti_test](./assets/kitti_test.jpg)
-
-## Getting Started
-
-[1] Check [installation](docs/install.md) for installation. Our code is mainly based on mmdetection3d.
-
-[2] Check [data_preparation](docs/prepare_dataset.md) for preparing SemanticKITTI and nuScenes datasets.
-
-[3] Check [train_and_eval](docs/train_and_eval.md) for training and evaluation.
-
-[4] Check [predict_and_visualize](docs/predict_and_visualize.md) for prediction and visualization.
-
-[5] Check [test_submission](docs/test_submission.md) for preparing the test submission to [SemanticKITTI SSC](https://codalab.lisn.upsaclay.fr/competitions/7170) and [nuScenes LiDAR Segmentation](https://www.nuscenes.org/lidar-segmentation?externalData=all&mapData=all&modalities=Any).
-
-## Model Zoo
-
-We provide the pretrained weights on SemanticKITTI and nuScenes datasets, reproduced with the released codebase.
-
-| Dataset | Backbone | SC IoU | SSC mIoU | LiDARSeg mIoU | Model Weights | Training Logs |
-|:----:|:----:|:----:|:----:|:----:|:----:|:----:|
-| [SemanticKITTI](projects/configs/occformer_kitti/occformer_kitti.py) | EfficientNetB7 | 36.42(val), 34.46(test) | 13.50(val), 12.37(test) | - | [Link](https://github.com/zhangyp15/OccFormer/releases/download/assets/occformer_kitti.pth) | [Link](https://github.com/zhangyp15/OccFormer/releases/download/assets/occformer_kitti.log)
-| [nuScenes](projects/configs/occformer_nusc/occformer_nusc_r50_256x704.py) | R50 | - | - | 68.1 | [Link](https://github.com/zhangyp15/OccFormer/releases/download/assets/occformer_nusc_r50.pth) | [Link](https://github.com/zhangyp15/OccFormer/releases/download/assets/occformer_nusc_r50.log)
-| [nuScenes](projects/configs/occformer_nusc/occformer_nusc_r101_896x1600.py) | R101-DCN | - | - | 70.0 | [Link](https://github.com/zhangyp15/OccFormer/releases/download/assets/occformer_nusc_r101.pth) | [Link](https://github.com/zhangyp15/OccFormer/releases/download/assets/occformer_nusc_r101.log)
-
-For SemanticKITTI dataset, the validation performance may fluctuate around 13.2 ~ 13.6 (SSC mIoU) considering the limited training samples. 
-
-## Related Projects
-
-[TPVFormer](https://github.com/wzzheng/TPVFormer): Tri-perspective view (TPV) representation for 3D semantic occupancy.
-
-[OpenOccupancy](https://github.com/JeffWang987/OpenOccupancy): A large scale benchmark extending nuScenes for surrounding semantic occupancy perception.
-
-## Acknowledgement
-
-This project is developed based on the following open-sourced projects: [MonoScene](https://github.com/astra-vision/MonoScene), [BEVDet](https://github.com/HuangJunJie2017/BEVDet), [BEVFormer](https://github.com/fundamentalvision/BEVFormer), [Mask2Former](https://github.com/facebookresearch/Mask2Former). Thanks for their excellent work.
-
-## Citation
-
-If you find this project helpful, please consider giving this repo a star or citing the following paper:
+```bash
+# On your local machine with internet
+bash scripts/download_pretrained.sh
 ```
-@article{zhang2023occformer,
-  title={OccFormer: Dual-path Transformer for Vision-based 3D Semantic Occupancy Prediction},
-  author={Zhang, Yunpeng and Zhu, Zheng and Du, Dalong},
-  journal={arXiv preprint arXiv:2304.05316},
-  year={2023}
-}
+
+This downloads all required pretrained weights:
+- `ckpts/efficientnet-b7_3rdparty_8xb32-aa_in1k_20220119-bf03951c.pth` (255 MB)
+- `ckpts/efficientnet-b4_3rdparty_8xb32-aa_in1k_20220119-45b8bd2b.pth` (75 MB)
+- `ckpts/resnet101-5d3b4d8f.pth` (~170 MB)
+
+**Total size: ~500 MB**
+
+Then upload the entire `ckpts/` directory to HPC.
+
+## Directory Structure
+
+All results are organized under `results/` directory:
+
 ```
+results/
+├── baseline/
+│   ├── model/              # Checkpoints
+│   │   ├── latest.pth      # For resuming
+│   │   ├── best_waymo_SSC_mIoU.pth
+│   │   └── epoch_*.pth
+│   └── logs/               # Training logs
+│       ├── train_<job_id>.log
+│       └── eval_<job_id>.log
+├── lr_5e5/
+│   ├── model/
+│   └── logs/
+├── lr_2e4/
+...
+└── reduced_queries/
+    ├── model/
+    └── logs/
+```
+
+## Available Experiments
+
+All configurations are defined in `projects/configs/occformer_waymo/experiments.py`:
+
+| Experiment | Description | Key Changes |
+|------------|-------------|-------------|
+| `baseline_fast` | Standard configuration | LR=1e-4, B7, normal aug |
+| `lr_5e5` | Lower learning rate | LR=5e-5 |
+| `lr_2e4` | Higher learning rate | LR=2e-4 |
+| `strong_aug` | Strong augmentation | Rot ±10°, Scale 0.85-1.15 |
+| `weak_aug` | Weak augmentation | Minimal augmentation |
+| `resnet101` | Different backbone | ResNet-101 |
+| `sgd` | SGD optimizer | SGD instead of AdamW |
+| `improved_imbalance_q30` | Weighted CE | Change loss for solving imbalance class |
+
+## Step-by-Step Usage
+
+### 0. Prepare Pretrained Weights (BEFORE HPC Upload!)
+
+On your **local machine with internet**:
+```bash
+bash scripts/download_pretrained.sh
+```
+
+Upload to HPC:
+```bash
+# From your local machine
+scp -r ckpts/ your_username@hpc.sjsu.edu:/home/018219422/OccFormerWithWaymoData/
+```
+
+Verify on HPC:
+```bash
+ls -lh ckpts/
+# Should see:
+# - efficientnet-b7_3rdparty_8xb32-aa_in1k_20220119-bf03951c.pth (255 MB)
+# - efficientnet-b4_3rdparty_8xb32-aa_in1k_20220119-45b8bd2b.pth (75 MB)
+```
+
+### 1. Sample Test (Recommended First!)
+
+Test with ~10 samples to verify everything works:
+
+```bash
+# Test single experiment
+sbatch scripts/run_experiment.sh baseline sample_test
+
+# Test all experiments (fast)
+bash scripts/submit_all_experiments.sh sample_test
+```
+
+Each sample test should complete in **~1 hour**.
+
+### 2. Full Training
+
+After verifying sample test works:
+
+```bash
+# Single experiment
+sbatch scripts/run_experiment.sh baseline
+
+# All experiments
+bash scripts/submit_all_experiments.sh
+```
+
+Each full experiment takes **~8-12 hours**.
+
+### 3. Check Progress
+
+```bash
+# Quick status
+bash scripts/check_progress.sh
+
+# Detailed queue info
+squeue -u $USER
+
+# Watch specific experiment
+tail -f results/baseline/logs/train_<job_id>.log
+```
+
+### 4. Resume Interrupted Training
+
+Training **automatically resumes** from latest checkpoint if interrupted.
+
+Manual resume:
+```bash
+sbatch scripts/run_experiment.sh baseline
+# Will detect results/baseline/model/latest.pth and resume
+```
+
+## Experiment Configuration
+
+Edit `scripts/run_experiment.sh` to adjust SLURM settings:
+
+```bash
+#SBATCH --time=48:00:00        # Max time
+#SBATCH --mem=64G              # Memory
+#SBATCH --partition=gpu        # Your partition name
+```
+
+## Time Estimates
+
+### Sample Test Mode (~10 samples)
+- Training: 2 epochs × ~30 min = **1 hour**
+- Total for 10 experiments: **~10 hours** (parallel)
+
+### Full Training Mode
+- Baseline (30 epochs): **~58 hours**
+
+## File Reference
+
+- `scripts/run_experiment.sh` - Main SBATCH script
+- `scripts/submit_all_experiments.sh` - Submit all experiments
+- `scripts/check_progress.sh` - Monitor progress
+- `tools/train_waymo.py` - Training script
+- `projects/configs/occformer_waymo/experiments.py` - Experiment configs
+- `projects/configs/occformer_waymo/waymo_base.py` - Base config
