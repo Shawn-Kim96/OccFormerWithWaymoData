@@ -309,6 +309,50 @@ EXPERIMENTS = {
         ),
         'model_neck_in_channels': [32, 56, 160, 448, 1792],
     },
+
+    'improved_imbalance_q30': {
+        'lr': 1e-4,
+        'description': 'improved_imbalance + 30 queries (memory-friendly)',
+        'data_train_load_interval': 10,
+        'data_val_load_interval': 10,
+        'data_test_load_interval': 10,
+        'runner': dict(type='EpochBasedRunner', max_epochs=30),
+        'evaluation_interval': 0,
+        'use_class_weights': True,
+        'class_weights': [
+            10.0,  # 0: general_object (rare)
+            2.0,   # 1: vehicle
+            5.0,   # 2: pedestrian (rare)
+            8.0,   # 3: sign (rare)
+            10.0,  # 4: cyclist (very rare)
+            8.0,   # 5: traffic_light (rare)
+            3.0,   # 6: pole
+            15.0,  # 7: construction_cone (very rare)
+            10.0,  # 8: bicycle (rare)
+            15.0,  # 9: motorcycle (very rare)
+            1.5,   # 10: building
+            1.0,   # 11: vegetation
+            2.0,   # 12: tree_trunk
+            1.0,   # 13: road (common)
+            1.0,   # 14: walkable (common)
+            0.5,   # 15: free (very common)
+            1.0,   # 16: background
+        ],
+        'mask2former_num_queries': 30,
+        'samples_per_gpu': 1,
+        'model_backbone': dict(
+            type='CustomEfficientNet',
+            arch='b4',  # B7 -> B4 for memory savings
+            drop_path_rate=0.2,
+            frozen_stages=0,
+            norm_eval=False,
+            out_indices=(2, 3, 4, 5, 6),
+            with_cp=True,
+            init_cfg=dict(type='Pretrained', prefix='backbone',
+                         checkpoint='ckpts/efficientnet-b4_3rdparty_8xb32-aa_in1k_20220119-45b8bd2b.pth'),
+        ),
+        'model_neck_in_channels': [32, 56, 160, 448, 1792],
+    },
 }
 
 

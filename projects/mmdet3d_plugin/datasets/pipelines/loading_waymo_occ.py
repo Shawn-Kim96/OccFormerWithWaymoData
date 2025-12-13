@@ -1,7 +1,4 @@
-"""
-Waymo-specific occupancy loading with automatic GT resizing.
-This solves the grid size mismatch (200,200,16) -> (256,256,32) issue.
-"""
+"""Waymo occupancy loader with optional GT resizing."""
 import numpy as np
 import torch
 from mmdet.datasets.builder import PIPELINES
@@ -11,15 +8,7 @@ from scipy.ndimage import zoom
 
 @PIPELINES.register_module()
 class LoadWaymoOccAnnotation():
-    """Load Waymo occupancy annotations with automatic resizing.
-
-    Args:
-        bda_aug_conf (dict): BDA augmentation config
-        is_train (bool): Training mode flag
-        point_cloud_range (list): Point cloud range [x_min, y_min, z_min, x_max, y_max, z_max]
-        target_occ_size (list): Target occupancy grid size [X, Y, Z]. Default: None (use GT size)
-        resize_method (str): 'nearest' or 'trilinear'. Default: 'nearest' (better for labels)
-    """
+    """Load Waymo occupancy annotations (optionally resizing the voxel grid)."""
     def __init__(self,
                  bda_aug_conf,
                  is_train=True,
@@ -34,7 +23,7 @@ class LoadWaymoOccAnnotation():
         self.resize_method = resize_method
 
         if self.target_occ_size is not None:
-            print(f"[LoadWaymoOccAnnotation] Will resize GT from (200,200,16) to {tuple(self.target_occ_size)}")
+            print(f"Resizing Waymo occupancy GT to {tuple(self.target_occ_size)}")
 
     def resize_occupancy(self, occ_labels, target_size):
         """Resize occupancy labels to target size.
