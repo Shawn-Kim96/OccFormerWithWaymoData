@@ -9,7 +9,7 @@ EXPERIMENTS = {
         'lr': 1e-4,
         'description': 'test'
     },
-    
+
     # Baseline
     'baseline': {
         'lr': 1e-4,
@@ -210,11 +210,9 @@ EXPERIMENTS = {
         'data_val_load_interval': 10,
         'data_test_load_interval': 10,
         'runner': dict(type='EpochBasedRunner', max_epochs=40),
-        'evaluation_interval': 5,  # Evaluate every 5 epochs
-        # Use Waymo-specific loading with resizing
+        'evaluation_interval': 5,
         'use_waymo_loader': True,
-        'target_occ_size': [256, 256, 32],  # Resize GT to match model
-        # Use focal loss for class imbalance
+        'target_occ_size': [256, 256, 32],
         'use_focal_loss': True,
     },
 
@@ -233,17 +231,83 @@ EXPERIMENTS = {
 
     'improved_small_grid': {
         'lr': 1e-4,
-        'description': 'Use native GT size (200,200,16) - more memory efficient',
+        'description': 'Use native GT size (200,200,16) - more memory efficient with smaller backbone',
         'data_train_load_interval': 10,
         'data_val_load_interval': 10,
         'data_test_load_interval': 10,
         'runner': dict(type='EpochBasedRunner', max_epochs=35),
         'evaluation_interval': 5,
-        # Keep GT size, change model to match
         'use_waymo_loader': True,
-        'target_occ_size': None,  # Don't resize, use (200,200,16)
-        'occ_size': [200, 200, 16],  # Override model config
+        'target_occ_size': None,
+        'occ_size': [200, 200, 16],
         'use_focal_loss': True,
+        'model_backbone': dict(
+            type='CustomEfficientNet',
+            arch='b4',
+            drop_path_rate=0.2,
+            frozen_stages=0,
+            norm_eval=False,
+            out_indices=(2, 3, 4, 5, 6),
+            with_cp=True,
+            init_cfg=dict(type='Pretrained', prefix='backbone',
+                         checkpoint='ckpts/efficientnet-b4_3rdparty_8xb32-aa_in1k_20220119-45b8bd2b.pth'),
+        ),
+        'model_neck_in_channels': [32, 56, 160, 448, 1792],
+        'data_config': {
+            'input_size': (480, 720),
+            'resize': (-0.06, 0.11),
+            'rot': (-5.4, 5.4),
+            'flip': True,
+            'crop_h': (0.0, 0.0),
+            'resize_test': 0.00,
+            'cams': ['image_0', 'image_1', 'image_2', 'image_3', 'image_4'],
+            'Ncams': 5,
+        },
+        'samples_per_gpu': 1,
+    },
+
+    'improved_imbalance': {
+        'lr': 1e-4,
+        'description': 'baseline_fast + weighted CrossEntropy + EfficientNet-B4 for memory',
+        'data_train_load_interval': 10,
+        'data_val_load_interval': 10,
+        'data_test_load_interval': 10,
+        'runner': dict(type='EpochBasedRunner', max_epochs=30),
+        'evaluation_interval': 0,
+        'use_class_weights': True,
+        'class_weights': [
+            10.0,  # 0: general_object (rare)
+            2.0,   # 1: vehicle
+            5.0,   # 2: pedestrian (rare)
+            8.0,   # 3: sign (rare)
+            10.0,  # 4: cyclist (very rare)
+            8.0,   # 5: traffic_light (rare)
+            3.0,   # 6: pole
+            15.0,  # 7: construction_cone (very rare)
+            10.0,  # 8: bicycle (rare)
+            15.0,  # 9: motorcycle (very rare)
+            1.5,   # 10: building
+            1.0,   # 11: vegetation
+            2.0,   # 12: tree_trunk
+            1.0,   # 13: road (common)
+            1.0,   # 14: walkable (common)
+            0.5,   # 15: free (very common)
+            1.0,   # 16: background
+        ],
+        'samples_per_gpu': 1,
+        # Use smaller backbone to save memory (B7 -> B4)
+        'model_backbone': dict(
+            type='CustomEfficientNet',
+            arch='b4',  # B7 -> B4 for memory savings
+            drop_path_rate=0.2,
+            frozen_stages=0,
+            norm_eval=False,
+            out_indices=(2, 3, 4, 5, 6),
+            with_cp=True,
+            init_cfg=dict(type='Pretrained', prefix='backbone',
+                         checkpoint='ckpts/efficientnet-b4_3rdparty_8xb32-aa_in1k_20220119-45b8bd2b.pth'),
+        ),
+        'model_neck_in_channels': [32, 56, 160, 448, 1792],
     },
 }
 
@@ -275,12 +339,10 @@ def get_config(exp_name, sample_test=False):
 
     # Sample test mode
     if sample_test:
-        # Subsample aggressively for quick sanity checks
-        config['data_train_load_interval'] = 10000  # train ~1/100
-        config['data_val_load_interval'] = 800    # val ≈10 samples (8069/800 ≈ 10)
-        config['data_test_load_interval'] = 800   # test ≈10 samples
+        config['data_train_load_interval'] = 10000
+        config['data_val_load_interval'] = 800 
+        config['data_test_load_interval'] = 800 
         config['runner'] = dict(type='EpochBasedRunner', max_epochs=2)
-        # Disable eval/save-best for quick smoke test (outputs are dummy)
         config['evaluation_interval'] = 1
 
     return config, description
