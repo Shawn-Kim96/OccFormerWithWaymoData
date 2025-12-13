@@ -24,251 +24,215 @@
 }
 
 \title{Camera-only 3D Semantic Occupancy on Waymo with OccFormer}
-\author{Su Hyun Kim (SJSU ID: 018219422)}
-\date{December 2025}
+\author{Su Hyun Kim (SJSU ID: 018219422)\\Team 9, Option 2 (Fine-Tune \& Train)}
+\date{December 15, 2025}
 
 \begin{document}
 \maketitle
 
-\section*{Cover Information}
-\begin{tabular}{@{}ll@{}}
-\toprule
-Team ID & \textit{(fill in)} \\
-Project Title & Camera-only 3D Semantic Occupancy on Waymo with OccFormer \\
-Team Members & Su Hyun Kim (018219422), \textit{(email: fill in)} \\
-Project Track & Fine-Tune \& Train (Option 2) \\
-Focused Areas & 3D semantic occupancy, camera-only BEV/3D transformers, Waymo integration, debugging/memory \\
-\bottomrule
-\end{tabular}
 
 \section*{Abstract}
 This project began as a fork of the public OccFormer codebase and ended as a working Waymo occupancy pipeline inside MMDetection3D: dataset loading, training/evaluation scripts, and a qualitative video demo.
 Most of the work was integration and debugging rather than changing the core model. The main friction points were aligning Waymo KITTI-format sensor exports with Occ3D-Waymo occupancy labels, fixing label conventions (free-space label), dealing with the fact that Waymo GT volumes are commonly 200$\times$200$\times$16 while the default model grid is 256$\times$256$\times$32, and keeping training stable on a single 12\,GB GPU.
 The best run that completed end-to-end in this repo is \texttt{baseline\_fast} (10\% data via \texttt{load\_interval=10}, EfficientNet-B7, CrossEntropy), which reached 13.41 mIoU on the validation set based on the printed IoU table in \texttt{results/baseline\_fast/logs/evaluate.log}.
-I also tried stronger augmentation, learning-rate changes, SGD, and multiple imbalance variants (focal loss, weighted CE, fewer Mask2Former queries). Several runs failed for concrete engineering reasons (registry import order, wrong image loader, SLURM environment issues, and CUDA out-of-memory), and this report documents those failures with log excerpts and the specific files I changed.
+Additional experiments included stronger augmentation, learning-rate changes, SGD, and multiple imbalance variants (focal loss, weighted CE, fewer Mask2Former queries). Several runs failed for concrete engineering reasons (registry import order, wrong image loader, SLURM environment issues, and CUDA out-of-memory), and this report documents those failures with log excerpts and the specific files modified.
 
 \section{Introduction \& Problem Description}
-Semantic occupancy represents a driving scene as a dense 3D voxel grid around the ego vehicle, where each voxel is assigned an occupancy/semantic label. Compared to box-based perception, occupancy is useful for planning because it captures free space and structure even when objects are partially occluded.
+Semantic occupancy represents a driving scene as a dense 3D voxel grid around the ego vehicle, where each voxel is assigned an occupancy state and a semantic class label. Unlike box-based perception, this representation explicitly models both free space and scene structure, which is directly useful for downstream planning and remains informative under partial occlusions.
 
-My goal in this project was to run OccFormer on Waymo occupancy data and produce a submission-quality package: reproducible training and evaluation commands, quantitative results (tables and figures), and a short qualitative demo video that shows camera inputs and predicted BEV occupancy slices.
-I selected Option 2 (fine-tune/train) because the main learning outcome for me was understanding the model and then making it actually run on a new dataset under real cluster constraints.
+This project studies OccFormer~\cite{occformer}, a recent camera-only 3D semantic occupancy model. The core objective is to fine-tune OccFormer on Waymo occupancy data and evaluate the resulting model with reproducible training and testing procedures. Rather than proposing a new architecture, the primary contribution is building an end-to-end, repeatable pipeline that makes a public occupancy model run on a new large-scale dataset under practical compute constraints.
+
+Option 2 (fine-tune/train) was chosen because the main learning outcome was understanding the model and training pipeline in depth, and then making the full training/evaluation workflow run reliably in an HPC environment.
 
 \section{Background / Related Work}
-OccFormer~\cite{occformer} is a camera-only 3D semantic occupancy model built around a ``lift to 3D, then reason in 3D'' design.
-It starts from multi-view camera images and extracts per-view features using a standard image backbone and neck.
-To obtain 3D structure without LiDAR at inference time, it estimates depth distributions and uses a Lift-Splat-Shoot style view transformation to project image features into a voxel-aligned 3D volume in the ego coordinate system.
-This is the part that connects 2D pixels to 3D voxels and makes the rest of the model ``geometry aware'' even though it is camera-only.
+OccFormer~\cite{occformer} is a camera-only 3D semantic occupancy model built around a ``lift to 3D, then reason in 3D'' design. Given multi-view RGB images, it extracts per-view features using a standard image backbone and neck. To recover 3D structure without LiDAR at inference time, it predicts depth distributions and applies a Lift-Splat-Shoot style view transformation to project image features into a voxel-aligned 3D volume in the ego coordinate system. This step connects 2D pixels to 3D voxels and provides geometry-aware features for subsequent 3D reasoning.
 
-The 3D encoder in OccFormer is designed to be efficient on large voxel grids. Instead of applying fully dense attention everywhere, it splits the transformer encoder into two complementary pathways: a local pathway that attends within local 3D windows (good for fine structure) and a global pathway that uses a BEV-style representation to propagate long-range context.
-The decoder adapts the Mask2Former idea to 3D occupancy: a fixed set of queries predicts class scores and mask embeddings, which are combined with voxel features to produce voxel-level logits. This query-based decoding step is also where memory usage becomes a major constraint on smaller GPUs.
+To remain efficient on large voxel grids, OccFormer avoids fully dense attention and instead uses a two-pathway transformer encoder: a local pathway that attends within 3D windows for fine-grained structure, and a global pathway that propagates long-range context through a BEV-style representation. The decoder adapts Mask2Former to 3D occupancy: a fixed set of queries predicts class scores and mask embeddings, which are combined with voxel features to produce voxel-level logits. Figure~\ref{fig:occ_frame} summarizes the overall framework.
 
-Occupancy learning has a severe class imbalance problem because most voxels are free space. Focal loss~\cite{focal} is a standard tool to emphasize rare/hard examples, but in this project it also made memory usage worse in the backward pass.
-Part of my work was deciding which imbalance approach could realistically run on a 12\,GB card (focal loss vs weighted cross entropy vs reducing queries / grid size).
+\begin{figure}[h]
+  \centering
+  \includegraphics[width=0.9\linewidth]{figures/occformer_framework.jpg}
+  \caption{OccFormer framework.}
+  \label{fig:occ_frame}
+\end{figure}
 
-\section{System / Model / Algorithm Design}
-\subsection{Runtime environment}
-All experiments and tooling in this repository assume a Python 3.7 environment. The conda specification \texttt{docs/occformer.yaml} pins the main stack to PyTorch 1.10.1 (CUDA 11.3.1), MMCV-Full 1.4.0, MMDetection 2.14.0, and MMDetection3D 0.17.1.
-On the class cluster I primarily ran on a single Tesla P100 12\,GB (see the \texttt{nvidia-smi} header in \texttt{results/waymo\_full/waymo\_full\_15649.out}).
+A common challenge in occupancy learning is severe class imbalance, since most voxels correspond to free (empty) space. Focal loss~\cite{focal} is widely used to emphasize rare and hard examples, and focal-loss-based training was explored as one of the configurations. In practice, however, the additional memory cost during backpropagation limited stability in the available training environment, so the final results prioritize configurations that could complete reliably end-to-end.
+
+\section{System Design and Implementation Details}
+
+\subsection{System environment}
+OccFormer is designed to run in a Python 3.7 environment with \texttt{cudatoolkit=11.3}. However, the class HPC cluster did not provide CUDA 11.3 as a supported system module. To match the original dependency stack, external CUDA 11.3 wheels were downloaded and a compatible environment was built around them, including the corresponding versions of Python, \texttt{mmcv-full}, \texttt{mmdetection}, and \texttt{mmdetection3d}.
+
+All experiments were executed on the HPC GPU nodes. The allocated GPU varied by partition and job availability, but most training and evaluation runs were conducted on a Tesla P100 (see the \texttt{nvidia-smi} header in \texttt{results/waymo\_full/waymo\_full\_15649.out}).
 
 \begin{table}[h]
   \centering
   \begin{tabular}{ll}
     \toprule
-    Component & Version (source) \\
+    Component & Version \\
     \midrule
-    Python & 3.7.16 (\texttt{docs/occformer.yaml}) \\
-    PyTorch & 1.10.1 + CUDA 11.3.1 (\texttt{docs/occformer.yaml}) \\
-    MMCV-Full & 1.4.0 (\texttt{docs/occformer.yaml}) \\
-    MMDetection & 2.14.0 (\texttt{docs/occformer.yaml}) \\
-    MMDetection3D & 0.17.1 (\texttt{docs/occformer.yaml}) \\
-    GPU (typical) & Tesla P100-PCIE-12GB (\texttt{results/waymo\_full/waymo\_full\_15649.out}) \\
+    Python & 3.7.16 \\
+    PyTorch & 1.10.1 + CUDA 11.3.1 \\
+    MMCV-Full & 1.4.0 \\
+    MMDetection & 2.14.0 \\
+    MMDetection3D & 0.17.1 \\
+    GPU & Tesla P100-PCIE-12GB \\
     \bottomrule
   \end{tabular}
   \caption{Software/hardware stack used for this project.}
   \label{tab:env}
 \end{table}
 
+
+\subsection{Repository layout}
+Before getting into dataset details, it helps to see how the repository is organized, because most of the engineering work in this project was making these pieces fit together.
+The overall layout follows the standard MMDetection3D project structure (model code as a plugin + configs + entry-point scripts), and the Waymo-specific parts are concentrated in a small number of folders:
+
+\begin{lstlisting}
+OccFormerWithWaymoData/
+  mmdetection3d/            # upstream framework (MMDet3D)
+  projects/
+    mmdet3d_plugin/         # OccFormer + datasets/losses/pipelines
+    configs/occformer_waymo/# Waymo configs + experiment presets
+  tools/                    # runnable entry points
+  scripts/                  # SLURM wrappers and quick checks
+  data/                     # Waymo data, exports, occupancy GT
+  results/                  # experiment outputs
+  reports/final_report/     # LaTeX report + figures
+\end{lstlisting}
+
+From the original OccFormer fork, the main additions in this class project are:
+(1) a Waymo experiment runner that applies preset overrides,
+(2) Waymo utilities for keeping metadata consistent,
+(3) a video demo generator,
+and (4) a small set of Waymo-specific dataset/pipeline hooks.
+
+
 \subsection{Data: Waymo sensor exports + Occ3D-Waymo occupancy labels}
-This project combines two sources of information that have to agree on indexing and geometry. The Occ3D-Waymo labels used here are voxelized at 0.4\,m resolution over a range of approximately $[-40, -40, -1, 40, 40, 5.4]$ meters, which corresponds to a 200$\times$200$\times$16 volume. The semantic labels are 0--14, and free space is stored as label 23 (summarized in \texttt{tools/data\_downloader/waymo/occ3d\_waymo.md}).
+This project combines Waymo sensor exports (images + LiDAR) and Occ3D-Waymo occupancy ground truth. These two sources must agree on frame indexing and camera geometry.
+Occ3D-Waymo labels here are voxelized at 0.4\,m resolution over a range of approximately $[-40, -40, -1, 40, 40, 5.4]$ meters, which corresponds to a 200$\times$200$\times$16 volume~\cite{occ3d}. The semantic labels are 0--14, and free space is stored as label 23.
 
-\textbf{Waymo sensor data (images + LiDAR).} In my workspace, Waymo Open Dataset TFRecords are stored under \texttt{data/waymo\_v1-3-1/waymo\_format/} with \texttt{training/}, \texttt{validation/}, and \texttt{testing/} subfolders. The preparation notes I followed are in \texttt{tools/data\_downloader/waymo/occ3d\_waymo.md} (download Waymo v1.3.1 from the Waymo site, then place TFRecords under \texttt{waymo\_format/}). MMDetection3D training expects a ``dataset directory'' rather than TFRecords, so I used the built-in MMDetection3D converter (\texttt{mmdetection3d/tools/create\_data.py waymo}) to export a KITTI-style layout. The helper script \texttt{scripts/sample\_waymo\_data.sh} shows the exact converter command for a small subset, and the full conversion log is saved as \texttt{create\_waymo\_data\_13356.log}.
-The converter writes \texttt{data/waymo\_v1-3-1/kitti\_format/} containing \texttt{training/image\_0..4/}, \texttt{training/velodyne/}, \texttt{training/calib/}, and metadata PKLs such as \texttt{kitti\_infos\_train.pkl}, \texttt{kitti\_infos\_val.pkl}, and the augmentation database under \texttt{kitti\_gt\_database/}.
+In the HPC environment, Waymo data is stored under a single versioned root, and the three subtrees below are the ones the code relies on:
+\begin{lstlisting}
+data/waymo_v1-3-1/
+  waymo_format/     # raw TFRecords from Waymo Open Dataset
+  kitti_format/     # KITTI-style export generated by MMDet3D converter
+  occ3d_waymo/      # Occ3D-Waymo GT (.npz) + info/pose PKLs
+\end{lstlisting}
 
-One practical issue I ran into is that the Waymo converter uses TensorFlow. When I launched it on a CPU node (\texttt{c1.hpc.coe}), TensorFlow printed warnings about missing \texttt{libcuda.so.1} and \texttt{/proc/driver/nvidia/version} in \texttt{create\_waymo\_data\_13356.log}. The job still completed on CPU and produced the KITTI-format output files, but it is an easy failure mode if you expect CUDA to be available everywhere.
+\textbf{Waymo sensor data (images + LiDAR).} Waymo Open Dataset v1.3.1 TFRecords are converted into a file-based KITTI-format layout using the built-in MMDetection3D converter (\texttt{create\_data.py waymo}). One practical detail is that the converter depends on TensorFlow; when launched on a CPU-only node it can print CUDA-related warnings (missing \texttt{libcuda.so.1}) even though the conversion proceeds on CPU.
 
-\textbf{Occupancy ground truth (Occ3D-Waymo style).} The voxel ground truth is stored separately under \texttt{data/waymo\_v1-3-1/occ3d\_waymo/}. Each frame has an \texttt{.npz} file under \texttt{training/<scene>/<frame>\_04.npz} or \texttt{validation/<scene>/<frame>\_04.npz}. The metadata that indexes frames and cameras is stored in \texttt{waymo\_infos\_train.pkl} / \texttt{waymo\_infos\_val.pkl} and camera/pose pickles \texttt{cam\_infos.pkl} and \texttt{cam\_infos\_vali.pkl}. The same preparation document (\texttt{tools/data\_downloader/waymo/occ3d\_waymo.md}) includes the download link for the GT package and the expected directory layout.
-Because metadata and local file layout can drift (missing files, different roots, partial downloads), I generated filtered info files using \texttt{tools/filter\_waymo\_infos.py}, which scans the KITTI-format directory, drops samples with missing sensor or occupancy files, and can optionally subsample. The configs in this repo point to \texttt{waymo\_infos\_train.filtered.pkl} and \texttt{waymo\_infos\_val.filtered.pkl}.
+\textbf{Occupancy ground truth (Occ3D-Waymo).} Occ3D-Waymo provides per-frame voxel ground truth stored as \texttt{.npz} files, plus metadata pickles that describe the frame list and camera poses. Because partial downloads and missing frames are common in an HPC workflow, the metadata files are filtered to keep only samples that exist on disk and match the converted sensor exports.
+
+One practical detail that mattered for reproducibility is that the Waymo conversion tool relies on TensorFlow. When run on a CPU-only node, it can print CUDA-related warnings (missing \texttt{libcuda.so.1}) even though the conversion proceeds on CPU.
+Because metadata and local file layout can drift (missing files, different roots, partial downloads), filtered info files were generated using \texttt{tools/filter\_waymo\_infos.py}, which scans the KITTI-format directory, drops samples with missing sensor or occupancy files, and can optionally subsample.
 
 \subsection{Waymo dataset interface and model configuration}
-The base Waymo configuration is \texttt{projects/configs/occformer\_waymo/waymo\_base.py}.
-It uses the dataset class \texttt{CustomWaymoDataset\_T} from \texttt{projects/mmdet3d\_plugin/datasets/waymo\_temporal\_zlt.py} with five camera views.
-At runtime the dataset joins KITTI-format sensor data (\texttt{data\_root=data/waymo\_v1-3-1/kitti\_format}) with Occ3D-Waymo metadata (\texttt{ann\_file=data/waymo\_v1-3-1/occ3d\_waymo/waymo\_infos\_*.pkl}).
-For occupancy labels, the dataset first looks for an explicit occupancy path inside the info dict (keys such as \texttt{gt\_occ} / \texttt{occ\_path}). If no path is present, it falls back to a deterministic convention and constructs \texttt{.../occ3d\_waymo/<split>/<scene>/<frame>\_04.npz} directly from the integer \texttt{sample\_idx}.
+The original OccFormer codebase already contained a Waymo dataset class, but it was designed around a KITTI-style 3D detection workflow: it focuses on boxes and LiDAR-based calibration files, and it does not naturally carry the Occ3D occupancy voxel labels or the camera-pose metadata that OccFormer needs for image-to-voxel lifting.
+In other words, ``loading Waymo'' is not enough for this project: the training loop needs a dataset interface that (1) feeds OccFormer the multi-view camera geometry in the expected format and (2) provides voxel ground truth for occupancy supervision.
 
-On the model side, the config follows the original OccFormer pipeline: image backbone + neck, an image-to-voxel view transformer, a 3D encoder, and a Mask2Former-style occupancy head.
-To support many experiments without duplicating configs, I added an experiment-preset layer in \texttt{projects/configs/occformer\_waymo/experiments.py} and a training entry point \texttt{tools/train\_waymo.py} that applies these overrides (learning rate, augmentation, backbone, query count, and loss function) and keeps outputs organized under \texttt{results/<exp\_name>/}.
+To make that work, the Waymo occupancy training loop is built around \texttt{CustomWaymoDataset\_T} (a wrapper on top of \texttt{CustomWaymoDataset}). The key changes are practical rather than algorithmic:
+it reads per-frame, per-camera pose information (intrinsics and extrinsics) from the Occ3D-Waymo metadata, assembles the multi-view camera inputs that the OccFormer pipeline expects, and attaches occupancy ground truth as \texttt{gt\_occ} so the Mask2Former occupancy head can compute voxel losses.
 
-\section{Implementation Details}
-\subsection{Codebase structure and what I actually modified}
-OccFormer itself is implemented under \texttt{projects/mmdet3d\_plugin/occformer/}. My Waymo work primarily lives in three places:
-(1) dataset and pipeline code under \texttt{projects/mmdet3d\_plugin/datasets/}, (2) configs/presets under \texttt{projects/configs/occformer\_waymo/}, and (3) runnable scripts under \texttt{tools/} and \texttt{scripts/}.
-The most important files for ``this repo works on Waymo'' are \texttt{projects/configs/occformer\_waymo/waymo\_base.py}, \texttt{projects/configs/occformer\_waymo/experiments.py}, \texttt{tools/train\_waymo.py}, and \texttt{tools/make\_waymo\_demo.py}.
+On the model side, the Waymo config keeps the original OccFormer architecture (image backbone + neck, view transformer, 3D encoder, Mask2Former-style occupancy head). An experiment-preset layer and a dedicated training entry point (\texttt{experiments.py} + \texttt{train\_waymo.py}) are used for iteration speed, so controlled changes (optimizer/LR, augmentations, backbone size, query count, and loss choice) can be rerun without duplicating config files or mixing outputs across runs.
 
-\subsection{Debugging stories (problems, root causes, fixes)}
-This project was dominated by integration bugs. Below are the issues that repeatedly blocked training/evaluation, the actual errors I saw, and the concrete fixes in the repo.
 
-\paragraph{1) Registry errors (dataset/loss not found)}
-MMDetection3D uses registries for datasets, heads, and losses, and a class is only registered if its module has been imported (so the decorator runs). Early on, experiments that enabled focal loss failed at build time. For example, \texttt{results/improved\_fast/logs/train\_15593.log} shows:
-\begin{lstlisting}
-KeyError: 'OccupancyFocalLoss is not in the models registry'
-\end{lstlisting}
-I fixed this by making sure the plugin imports its \texttt{models} module in \texttt{projects/mmdet3d\_plugin/\_\_init\_\_.py} so loss registration happens before config building. For visualization tools, I also import the plugin explicitly before calling \texttt{build\_dataset()} and \texttt{build\_model()} (see \texttt{tools/make\_waymo\_demo.py}).
 
-\paragraph{2) Wrong image loader for Waymo (nuScenes-style \texttt{curr} dict)}
-OccFormer was originally written for nuScenes and SemanticKITTI, and some pipelines assume nuScenes-style nested dictionaries. Waymo KITTI-format data is a flat dict. When the wrong loader was used, training crashed with a \texttt{KeyError: 'curr'} (summarized in \texttt{FIXES\_APPLIED.md}). The fix was to use the KITTI-style multi-view loader \texttt{LoadMultiViewImageFromFiles\_SemanticKitti} in \texttt{projects/configs/occformer\_waymo/waymo\_base.py}.
 
-\paragraph{3) Camera/pose index mismatch (two views swapped)}
-Occ3D-Waymo provides camera pose information in a fixed order, but for two views the pose index did not match the camera image folder naming in my export. If left unfixed, the model would use incorrect intrinsics/extrinsics for those images, which breaks the image-to-voxel view transformation.
-I fixed this directly in \texttt{get\_data\_info()} in \texttt{projects/mmdet3d\_plugin/datasets/waymo\_temporal\_zlt.py} by swapping the image paths for indices 2 and 3 (mapping pose index 2 $\rightarrow$ \texttt{image\_3} and pose index 3 $\rightarrow$ \texttt{image\_2}). I mirrored the same swap in \texttt{tools/filter\_waymo\_infos.py} so the filtering step checks the correct camera files.
+\subsection{End-to-end pipeline overview}
 
-\paragraph{4) SLURM ``Invalid device id'' (hard-coded GPU IDs)}
-Another early failure happened before the first iteration. Some configs assumed four GPUs (\texttt{gpu\_ids=[0,1,2,3]}), but SLURM often allocated a single GPU. The error is captured in \texttt{results/waymo\_full/waymo\_full\_15594.out}:
-\begin{lstlisting}
-AssertionError: Invalid device id
-\end{lstlisting}
-I fixed this in \texttt{tools/train\_waymo.py} by overriding \texttt{cfg.gpu\_ids} from \texttt{torch.cuda.device\_count()} at runtime. This made scripts robust regardless of how many GPUs the job was assigned.
+Figure~\ref{fig:arch} shows a overall high-level architecture diagram that matches the implementation. The two data sources (Waymo sensor exports and Occ3D voxel labels/poses) go through the dataset/pipeline interface that assembles multi-view inputs and occupancy GT, and the OccFormer model runs with the data, ending with losses/metrics and artifacts (checkpoints, logs, demo video).
 
-\paragraph{5) Occupancy label convention mismatch (free-space label)}
-One subtle issue was label conventions. In my Waymo occupancy GT, free space appears as label 23 in the raw voxel grid. The evaluation setup in this repo uses a 16-class occupancy label set where free space is class 15. If you do not remap 23 $\rightarrow$ 15, the model trains against an inconsistent label space and results are not meaningful. I implemented this remapping in the occupancy loading pipeline in \texttt{projects/mmdet3d\_plugin/datasets/pipelines/loading\_waymo\_occ.py} (and mirrored the same remap in \texttt{loading\_kitti\_occ.py} for consistency).
+\begin{figure}[h]
+  \centering
+  \includegraphics[width=0.9\linewidth]{figures/system_architecture.png}
+  \caption{Overall architecture of the Waymo occupancy pipeline built in this project (data alignment $\rightarrow$ dataset/pipeline $\rightarrow$ OccFormer inference/training $\rightarrow$ evaluation and artifacts).}
+  \label{fig:arch}
+\end{figure}
 
-\paragraph{6) GT grid size mismatch (200$\times$200$\times$16 vs 256$\times$256$\times$32)}
-Waymo occupancy GT volumes in \texttt{occ3d\_waymo} are commonly 200$\times$200$\times$16, but many OccFormer configs and visualization assumptions are 256$\times$256$\times$32. This mismatch shows up both in training (shape mismatch during loss) and in visualization (shape mismatch during concatenation). I handled this in two places:
 
-First, \texttt{tools/train\_waymo.py} supports experiment presets with \texttt{use\_waymo\_loader=True}. When enabled, the script replaces \texttt{LoadSemKittiAnnotation} with \texttt{LoadWaymoOccAnnotation} so GT can be resized to a target size via nearest-neighbor. This makes the behavior explicit per experiment instead of silently changing GT for everything.
 
-Second, \texttt{tools/make\_waymo\_demo.py} detects when GT and prediction shapes differ at runtime and resizes GT to the prediction grid before rendering. This directly addresses the type of crash I hit while generating videos.
+\subsection{Engineering challenges and resolutions}
+Most effort in this project was spent making a large research codebase run reliably on a new dataset under realistic cluster constraints. The model architecture itself was largely kept intact; progress depended on removing integration blockers and making the training/evaluation loop robust to common failure modes (missing files, mismatched conventions, SLURM environment differences, and GPU memory limits).
 
-\paragraph{7) CUDA out-of-memory during Mask2Former decoding (12\,GB GPU)}
-The hardest blocker was GPU memory. Focal-loss experiments often crashed inside the Mask2Former-style occupancy head. A reproducible example is \texttt{results/improved\_fast/logs/train\_15655.log}:
-\begin{lstlisting}
-RuntimeError: CUDA out of memory. Tried to allocate 100.00 MiB ...
-mask_pred = torch.einsum('bqc,bcxyz->bqxyz', mask_embed, mask_feature)
-\end{lstlisting}
-The underlying issue is that the query-based mask prediction allocates a large intermediate of shape \texttt{[B,Q,H,W,D]}. Reducing the number of queries reduces this tensor directly. Focal loss also increases backward memory compared to plain cross entropy, and fragmentation makes the final allocation unstable even when there appears to be ``some'' free memory.
 
-My mitigation steps are implemented and documented in the repo: I rewrote focal loss to avoid storing a full softmax tensor (\texttt{projects/mmdet3d\_plugin/models/losses/focal\_loss\_balanced.py}), reduced Mask2Former query count in memory-heavy presets (\texttt{projects/configs/occformer\_waymo/experiments.py}), and added allocator/caching hygiene in \texttt{tools/train\_waymo.py}. The notes \texttt{MEMORY\_FIX\_REPORT.md} and \texttt{FINAL\_SOLUTION.md} capture the reasoning and expected savings.
+\paragraph{1) nuScenes-style vs Waymo-style loader mismatch}
+OccFormer originates from nuScenes/SemanticKITTI code paths where some pipelines assume nuScenes-style nested dictionaries. Waymo KITTI-format exports use a flatter structure. When the wrong loader was used, training failed immediately. The resolution was to switch the data pipeline to the Waymo/KITTI-style multi-view loader so that image tensors and metadata are assembled in the expected format, and the result was making a new custom dataset loader.
 
-\paragraph{8) SLURM script failure before Python starts (\texttt{\$PYTHONPATH} unbound)}
-Some failures were pure shell issues. One evaluation job died immediately because the SLURM script ran with \texttt{set -u} and treated \texttt{\$PYTHONPATH} as an unbound variable. The error is recorded in \texttt{results/waymo\_eval/waymo\_eval\_15330.err}:
-\begin{lstlisting}
-/var/spool/slurmd/job15330/slurm_script: line 31: PYTHONPATH: unbound variable
-\end{lstlisting}
-I fixed this by exporting \texttt{PYTHONPATH} safely as \texttt{\$\{PYTHONPATH:-\}} in batch scripts (for example \texttt{scripts/eval\_waymo\_experiments.sh} and \texttt{scripts/run\_experiment.sh}).
+\paragraph{2) Camera ordering and pose alignment}
+A silent but damaging issue occurred when the camera pose ordering from the Occ3D metadata did not match the on-disk camera folder naming for two views. This does not necessarily crash training, but it corrupts geometry because the view transformer projects features using the wrong intrinsics/extrinsics. The resolution was to correct the two-view swap consistently both in sample construction and in the metadata alignment step, so pose indices and image paths remain consistent end-to-end.
 
-\section{Task Distribution \& Contributions}
-This was an individual project. I handled the Waymo dataset integration, conversion/metadata filtering, training/evaluation runs, debugging, and the tooling for plots and video demo.
+\paragraph{3) Label convention mismatch (free space)}
+Occ3D-Waymo occupancy labels include a free-space label stored as 23, while the training/evaluation label set in this repository treats free space as class 15. Without remapping, training targets and evaluation classes do not match and splitted out error at evaluation step. It was simple to fix, just change label 23 to 15, but took a long time to realize the problem.
+
+\paragraph{4) Voxel grid shape mismatch (GT vs model output)}
+Waymo occupancy ground truth commonly uses a 200$\times$200$\times$16 voxel grid, while many OccFormer configurations and visualization assumptions expect 256$\times$256$\times$32. This produced shape mismatch failures in loss computation and also broke visualization when comparing GT and predictions. The resolution was to implement an explicit nearest-neighbor resizing option for GT at load time (controlled by experiment presets), and to defensively align shapes in the demo renderer when visualizing predictions against GT.
+
+\paragraph{5) GPU memory limits during query-based decoding}
+On a 12\,GB GPU, the most frequent hard blocker was CUDA out-of-memory in the query-based occupancy head. The root cause is a large intermediate tensor with shape \texttt{[B,Q,H,W,D]} that is created during mask-to-voxel logit composition, and its memory footprint grows linearly with the number of queries $Q$. To mitigate this, the experiments progressively reduced the query count in memory-heavy presets, switched to smaller backbones when necessary, and implemented more memory-aware focal-loss variants. In practice, the debugging workflow was iterative: adjust a preset, reproduce the OOM failure, and verify whether peak memory dropped enough to finish training. The most reliable setting found was $Q=30$, which eliminated OOM in the target configuration, but there was not enough time to complete the full experiment schedule (one run typically takes about two days).
+
+
 
 \section{Evaluation \& Testing Results}
-\subsection{Metrics and evaluation notes}
-I use semantic mIoU over occupancy classes as the primary metric. Per-class IoU tables are read from the printed summary at the end of each \texttt{results/*/logs/evaluate.log}.
+\subsection{Experimental details}
+Before presenting quantitative results, Table~\ref{tab:exp_settings} summarizes the fine-tuning setups used in this repository. All runs follow the same overall task definition (camera-only semantic occupancy on a fixed voxel grid) and use the Waymo training split for optimization and the Waymo validation split for evaluation. Most experiments intentionally use a subsampled dataset via \texttt{load\_interval}=10 to make iteration feasible on limited GPU resources; the remaining changes focus on learning-rate/optimizer choice, backbone size, loss function for class imbalance, query count, and (for some runs) the voxel-grid and GT resizing policy.
+
+\input{experiment_settings_table.tex}
+
+\subsection{Evaluation metrics}
+Semantic mIoU over occupancy classes is used as the primary metric. Per-class IoU tables are read from the printed summary at the end of each \texttt{results/*/logs/evaluate.log}.
 One confusing detail is that the progress messages in these logs still say ``Evaluating nuScenes occupancy'' even for Waymo; this string comes from reused evaluation code.
 
-Another detail that matters for reproducibility: my evaluation logs print a correct per-class IoU table, but then end with:
-\begin{lstlisting}
-Evaluation skipped: required keys (count_matrix/scene_id/frame_id) missing.
-{'waymo_SSC_mIoU': 0.0}
-\end{lstlisting}
-This appears in \texttt{results/baseline\_fast/logs/evaluate.log} and other runs. For this report I use the printed per-class IoU table (which includes mIoU) as the quantitative result, because the returned metric dict is clearly inconsistent.
+Another detail that matters for reproducibility: the evaluation logs print a correct per-class IoU table, but then end with showing 0.0 in \texttt{mIoU}. This report uses the printed per-class IoU table (which includes mIoU) as the quantitative result, because the returned metric dict is clearly inconsistent.
 
-\subsection{Experiment summary (from saved logs)}
-Table~\ref{tab:miou} summarizes the runs that produced a valid IoU table in \texttt{evaluate.log}. The runs are configured through \texttt{projects/configs/occformer\_waymo/experiments.py} and trained with \texttt{tools/train\_waymo.py}.
+\subsection{nuScenes sanity check (baseline still works)}
+Although the main target dataset for this project was Waymo, a nuScenes ``sanity check'' was kept in the loop. The goal was to confirm that the original OccFormer nuScenes path still runs and produces reasonable metrics before and after Waymo-specific changes (custom dataset class, pipeline edits, plugin imports), rather than failing due to a broken environment or a registry/import regression.
+
+The log \texttt{logs/nusc\_infos.11975.out} records one such run using the released nuScenes checkpoint \texttt{ckpts/occformer\_nusc\_r50.pth}. At the end of the run, the log prints the nuScenes LiDAR segmentation mean IoU (0.692) and the occupancy metrics (SC IoU 0.130, SSC mIoU 0.102), along with a full per-class IoU table for the 16 lidarseg classes.
 
 \begin{table}[h]
   \centering
   \begin{tabular}{lr}
     \toprule
-    Experiment & mIoU (\%) \\
+    Metric (nuScenes) & Value \\
     \midrule
-    baseline\_fast & 13.41 \\
-    strong\_aug & 12.43 \\
-    sgd & 11.97 \\
-    lr\_5e4 & 7.29 \\
+    LiDARSeg mean IoU & 0.692 \\
+    Occupancy SC IoU & 0.130 \\
+    Occupancy SSC mIoU & 0.102 \\
     \bottomrule
   \end{tabular}
-  \caption{Waymo val mIoU parsed from the printed IoU tables in \texttt{results/*/logs/evaluate.log}.}
-  \label{tab:miou}
+  \caption{nuScenes sanity-check metrics printed in \texttt{logs/nusc\_infos.11975.out}.}
+  \label{tab:nusc_sanity}
 \end{table}
+
+
+\subsection{Waymo validation results (mIoU and per-class IoU)}
+Waymo validation results were consolidated into \texttt{final\_report/iou\_result.csv} for reporting. Not every preset in Table~\ref{tab:exp_settings} produced a complete evaluation run (several stopped early due to integration or memory issues), so Table~\ref{tab:waymo_results} reports the experiments that are included in the consolidated CSV (and reserves rows for any additional runs listed in \texttt{final\_report/report\_experiments.txt}).
+\input{waymo_results_table.tex}
+
+\paragraph{Result visualization}
+Figure~\ref{fig:perclass_all} visualizes the same per-class IoU values in a form that makes cross-experiment differences easier to see.
 
 \begin{figure}[h]
   \centering
-  \includegraphics[width=0.9\linewidth]{figures/miou_by_experiment.png}
-  \caption{mIoU across experiments (generated by \texttt{final\_report/make\_figures.py} from \texttt{results/*/logs/evaluate.log}).}
-  \label{fig:miou}
+  \includegraphics[width=\linewidth]{figures/per_class_all.png}
+  \caption{Per-class IoU across experiments (from \texttt{final\_report/iou\_result.csv}).}
+  \label{fig:perclass_all}
 \end{figure}
 
-\subsection{Per-class IoU (baseline\_fast)}
-Table~\ref{tab:perclass} reports the per-class IoU table printed at the end of \texttt{results/baseline\_fast/logs/evaluate.log}. Free space and road are learned reasonably, while several rare classes stay near 0 IoU, which matches the imbalance issue I observed during debugging.
+\subsection{Analysis of Waymo results}
+\paragraph{Overall performance level}
+The reported mIoU values (Table~\ref{tab:waymo_results}) are low compared to typical camera-based occupancy results on curated benchmarks. In this repository, the main goal was to make the full Waymo pipeline run end-to-end under tight compute limits, and most experiments were intentionally run with \texttt{load\_interval}=10 (approximately 10\% of the available training frames) to keep turnaround time feasible on a single 12\,GB GPU. Under that constraint, the model tends to underfit rare classes and learns a strong bias toward the dominant classes.
 
-\begin{table}[h]
-  \centering
-  \begin{tabular}{lrlr}
-    \toprule
-    Class & IoU & Class & IoU \\
-    \midrule
-    general\_object & 0.00 & bicycle & 1.04 \\
-    vehicle & 18.69 & motorcycle & 0.00 \\
-    pedestrian & 9.61 & building & 8.08 \\
-    sign & 1.79 & vegetation & 7.78 \\
-    cyclist & 7.22 & tree\_trunk & 3.52 \\
-    traffic\_light & 0.68 & road & 35.56 \\
-    pole & 4.34 & walkable & 20.10 \\
-    construction\_cone & 4.05 & free & 92.02 \\
-    \bottomrule
-  \end{tabular}
-  \caption{Per-class IoU for \texttt{baseline\_fast} from \texttt{results/baseline\_fast/logs/evaluate.log}.}
-  \label{tab:perclass}
-\end{table}
+\paragraph{Class imbalance dominates the error profile}
+The strongest signal in Figure~\ref{fig:perclass_all} is the extreme gap between frequent and rare classes. Free space stays above 91 IoU in every completed run, while several rare classes remain near 0 IoU (for example, \texttt{general\_object} and \texttt{motorcycle} are 0 across all reported experiments). Because mIoU averages over classes, a few near-zero classes significantly reduce the final score even when common structure classes are learned reasonably well. This behavior is consistent with occupancy supervision where most voxels are free space and small objects occupy very few voxels.
 
-\begin{figure}[h]
-  \centering
-  \includegraphics[width=\linewidth]{figures/per_class_baseline_fast.png}
-  \caption{Per-class IoU for \texttt{baseline\_fast}.}
-  \label{fig:perclass}
-\end{figure}
+\paragraph{Geometry-sensitive task vs aggressive augmentation}
+Comparing \texttt{baseline} and \texttt{strong\_aug}, stronger augmentation does not improve mIoU and tends to reduce some geometry-heavy classes (for example, \texttt{road} drops from 35.56 to 26.19, and \texttt{cyclist} drops from 7.22 to 3.34). In camera-only occupancy, the view transformer relies on accurate image-to-voxel geometry; overly aggressive photometric or geometric perturbations can make learning harder when the dataset is already subsampled and the model is not fully converged.
 
-\subsection{Correctness checks and reproducibility}
-Before launching long SLURM runs, I used small checks to catch obvious integration errors. \texttt{scripts/quick\_test.sh} imports the plugin, checks registry registration, and instantiates the occupancy loader to confirm label remapping and optional resizing. I also used \texttt{waymo\_debug.ipynb} to load a batch and inspect GT/output tensor shapes interactively.
 
-For a typical interactive session on the cluster:
-\begin{lstlisting}
-srun -p gpuqs --pty /bin/bash
-conda activate occformer307
-cd /fs/atipa/home/018219422/OccFormerWithWaymoData
-export PYTHONPATH=$(pwd):$PYTHONPATH
-\end{lstlisting}
-
-Training with SLURM wrappers:
-\begin{lstlisting}
-sbatch scripts/run_experiment.sh baseline_fast
-\end{lstlisting}
-
-For focal-loss experiments, I used the same wrapper but different experiment presets. \texttt{improved\_fast} is the ``heavier'' focal-loss configuration (resizes GT to 256$\times$256$\times$32), while \texttt{improved\_small\_grid} is the more memory-friendly option (keeps 200$\times$200$\times$16, uses EfficientNet-B4, and \texttt{samples\_per\_gpu=1}):
-\begin{lstlisting}
-# heavier (more GPU memory)
-sbatch scripts/run_full_experiment.sh improved_fast
-
-# lighter (most likely to fit on 12GB)
-sbatch scripts/run_full_experiment.sh improved_small_grid
-\end{lstlisting}
-
-Evaluation:
-\begin{lstlisting}
-python tools/test.py projects/configs/occformer_waymo/waymo_base.py \
-  results/baseline_fast/model/latest.pth --eval mIoU --launcher none
-\end{lstlisting}
-
-\subsection{Video demo}
-I added \texttt{tools/make\_waymo\_demo.py} to generate an OccFormer-style video for Waymo that shows a camera mosaic and BEV occupancy slices from both prediction and GT:
+\subsection{Visualize}
+This project adds \texttt{tools/make\_waymo\_demo.py} script to generate an OccFormer-style video for Waymo that shows a camera mosaic and BEV occupancy slices from both prediction and GT:
 \begin{lstlisting}
 python tools/make_waymo_demo.py \
   projects/configs/occformer_waymo/waymo_base.py \
@@ -277,13 +241,45 @@ python tools/make_waymo_demo.py \
   --out results/waymo_demo/baseline_fast_scene0.mp4
 \end{lstlisting}
 The script imports the plugin so custom datasets are registered, unwraps MMCV \texttt{DataContainer} objects for visualization, and resizes GT when its grid shape does not match the model output.
+One example of the video result can be found \href{https://drive.google.com/file/d/1JpLp_NKW8GlHJJB-ahJPbijWypJR1zuU/view?usp=sharing}{here}.
 
-\section{Limitations and Future Work}
-My best saved mIoU (13.41) is lower than I expected for a clean Waymo fine-tune, and several ``improved'' ideas did not complete cleanly under the 12\,GB constraint. The two biggest practical limitations were GPU memory (focal loss + Mask2Former decoding often OOM) and data fraction (I trained on 10\% via \texttt{load\_interval=10} to keep runtimes practical).
 
-If I had more time or more GPU headroom, I would (1) rerun focal-loss variants on a larger GPU starting from \texttt{improved\_small\_grid}, (2) fix the evaluation output path so \texttt{waymo\_SSC\_mIoU} is logged consistently (the current ``count\_matrix missing'' issue), and (3) increase the data fraction toward full training once the memory baseline is stable.
+\subsection{Reproducibility}
+To rerun the experiment, go to SJSU HPC and follow the instruction
+\begin{lstlisting}
+srun -p gpuqs --pty /bin/bash
+conda activate occformer307
+cd /home/018219422/OccFormerWithWaymoData
+export PYTHONPATH=$(pwd):$PYTHONPATH
+\end{lstlisting}
 
-\section{References}
+Training with SLURM wrappers:
+\begin{lstlisting}
+sbatch scripts/run_experiment.sh baseline_fast
+\end{lstlisting}
+
+Additional runs use the same wrapper with a different preset name from Table~\ref{tab:exp_settings}:
+\begin{lstlisting}
+sbatch scripts/run_experiment.sh improved_imbalance_q30
+\end{lstlisting}
+
+Evaluation:
+\begin{lstlisting}
+python tools/test.py projects/configs/occformer_waymo/waymo_base.py \
+  results/baseline_fast/model/latest.pth --eval mIoU --launcher none
+\end{lstlisting}
+
+
+\section{Conclusion}
+This project demonstrates an end-to-end, reproducible pipeline for fine-tuning a public camera-only 3D semantic occupancy model (OccFormer) on Waymo occupancy labels (Occ3D-Waymo) under practical HPC constraints. The main outcome is not a new model architecture, but a working system that aligns Waymo sensor exports with voxel ground truth, supports training/evaluation through stable entry-point scripts, and produces both quantitative results and a qualitative demo video.
+
+Quantitatively, the best completed run in this repository (\texttt{baseline}) achieved 13.41 mIoU on the Waymo validation split while training under a single 12\,GB GPU budget with a reduced data fraction. The experiments also clarified several engineering-critical factors for occupancy learning on Waymo: label convention consistency (free-space remapping), GT grid size mismatches (200$\times$200$\times$16 vs 256$\times$256$\times$32), and the dominant memory bottleneck in Mask2Former-style query decoding due to large \texttt{[B,Q,H,W,D]} intermediates.
+
+The primary limitations were GPU memory headroom and experiment time, which restricted the ability to complete longer schedules and to fully evaluate more memory-intensive imbalance strategies (e.g., focal loss with larger backbones). In addition, the evaluation pipeline currently prints correct per-class IoU tables but returns an inconsistent metric dictionary in some runs, which should be corrected for cleaner reporting.
+
+Future work will focus on running the full configuration sweep on larger GPUs (including query-count and focal-loss variants), increasing the training data fraction once a stable memory baseline is established, and fixing the evaluation output so the final reported metric is consistent across logs and returned summaries.
+
+
 \begin{thebibliography}{9}
 \bibitem{occformer}
 Y. Zhang, Z. Zhu, and D. Du, ``OccFormer: Dual-path Transformer for Vision-based 3D Semantic Occupancy Prediction,'' arXiv:2304.05316, 2023.
@@ -298,7 +294,7 @@ Waymo Open Dataset, \url{https://waymo.com/open/}.
 OpenMMLab MMDetection3D, \url{https://github.com/open-mmlab/mmdetection3d}.
 
 \bibitem{occ3d}
-Tsinghua MARS Lab Occ3D (Waymo occupancy labels), \url{https://github.com/Tsinghua-MARS-Lab/Occ3D}.
+X. Tian, T. Jiang, L. Yun, Y. Mao, H. Yang, Y. Wang, Y. Wang, and H. Zhao, ``Occ3D: A Large-Scale 3D Occupancy Prediction Benchmark for Autonomous Driving,'' \textit{Advances in Neural Information Processing Systems}, vol. 36, pp. 64318--64330, 2023.
 \end{thebibliography}
 
 \end{document}

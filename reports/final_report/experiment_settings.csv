@@ -1,0 +1,10 @@
+experiment,backbone,loss,optimizer,lr,epochs,queries,occ_size,gt_resize,input_size,load_interval,samples_per_gpu,val_interval
+baseline,EfficientNet-B7,CrossEntropy,AdamW,1.0e-04,30,100,256×256×32,-,640×960,10,1,0
+efficientnet_b4,EfficientNet-B4,CrossEntropy,AdamW,1.0e-04,30,100,256×256×32,-,640×960,10,2,0
+improved_fast,EfficientNet-B7,Focal,AdamW,1.0e-04,30,100,256×256×32,256×256×32,640×960,10,1,0
+improved_imbalance,EfficientNet-B4,Weighted CE,AdamW,1.0e-04,30,100,256×256×32,-,640×960,10,1,0
+improved_imbalance_q30,EfficientNet-B4,Weighted CE,AdamW,1.0e-04,30,30,256×256×32,-,640×960,10,1,0
+improved_small_grid,EfficientNet-B4,Focal,AdamW,1.0e-04,35,100,200×200×16,Native,480×720,10,1,5
+lr_5e4,EfficientNet-B7,CrossEntropy,AdamW,5.0e-04,30,100,256×256×32,-,640×960,10,1,0
+sgd,EfficientNet-B7,CrossEntropy,SGD,1.0e-02,30,100,256×256×32,-,640×960,10,1,0
+strong_aug,EfficientNet-B7,CrossEntropy,AdamW,1.0e-04,35,100,256×256×32,-,640×960,10,1,0
