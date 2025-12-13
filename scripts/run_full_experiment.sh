@@ -4,26 +4,12 @@
 #SBATCH --error=results/%x/%x_%j.err
 #SBATCH --nodes=1
 #SBATCH --ntasks-per-node=1
-#SBATCH --cpus-per-task=16
-#SBATCH --mem=64G
-#SBATCH --time=14-00:00:00
+#SBATCH --cpus-per-task=8
+#SBATCH --mem=32G
 #SBATCH --partition=gpuql
 
-# ============================================================================
-# Complete Waymo Experiment Pipeline: Train + Evaluate + Visualize + Analyze
-# ============================================================================
-#
+# Train + evaluate (and optionally visualize) a Waymo experiment.
 # Usage: sbatch scripts/run_full_experiment.sh <exp_name>
-# Example: sbatch scripts/run_full_experiment.sh improved_fast
-#
-# This script runs:
-# 1. Training (or resume from checkpoint)
-# 2. Evaluation on validation set
-# 3. Video generation from predictions
-# 4. Comprehensive analysis with plots and report
-#
-# All results are saved to: results/<exp_name>/
-# ============================================================================
 
 set -e  # Exit on error
 
@@ -40,11 +26,20 @@ source ~/miniconda3/etc/profile.d/conda.sh
 conda activate occformer307
 
 # Set Python path
-export PYTHONPATH="${SLURM_SUBMIT_DIR}:${PYTHONPATH}"
+export PYTHONPATH="${SLURM_SUBMIT_DIR}:${PYTHONPATH:-}"
 
 # ============================================================================
 # SECTION 1: TRAINING
 # ============================================================================
+
+echo ""
+echo "========================================="
+echo "GPU INFORMATION"
+echo "========================================="
+nvidia-smi
+echo ""
+echo "CUDA_VISIBLE_DEVICES: ${CUDA_VISIBLE_DEVICES:-Not set}"
+echo "========================================="
 
 echo ""
 echo "========================================="
@@ -228,7 +223,7 @@ cat > ${SUMMARY_FILE} << EOF
 
 ### Training
 - **Log:** [train_${SLURM_JOB_ID}.log](logs/train_${SLURM_JOB_ID}.log)
-- **Status:** ✅ Completed successfully
+- **Status:** Completed successfully
 
 ### Evaluation
 - **Log:** [eval_${SLURM_JOB_ID}.log](logs/eval_${SLURM_JOB_ID}.log)

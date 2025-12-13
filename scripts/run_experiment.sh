@@ -23,7 +23,18 @@ EXP_DIR="results/${EXP_NAME}"
 mkdir -p ${EXP_DIR}/model
 mkdir -p ${EXP_DIR}/logs
 
+# Print GPU information first
+echo ""
+echo "========================================="
+echo "GPU INFORMATION"
+echo "========================================="
+nvidia-smi
+echo ""
+echo "CUDA_VISIBLE_DEVICES: ${CUDA_VISIBLE_DEVICES:-Not set}"
+echo "========================================="
+
 # Print job information
+echo ""
 echo "========================================="
 echo "Waymo Experiment: ${EXP_NAME}"
 echo "Job ID: ${SLURM_JOB_ID}"
@@ -43,7 +54,7 @@ echo "========================================="
 # conda activate your_env
 
 # Set Python path to include project root
-export PYTHONPATH="${SLURM_SUBMIT_DIR}:${PYTHONPATH}"
+export PYTHONPATH="${SLURM_SUBMIT_DIR}:${PYTHONPATH:-}"
 
 # Check for checkpoint to resume from
 CHECKPOINT=""
