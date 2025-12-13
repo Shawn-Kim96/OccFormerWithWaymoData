@@ -136,7 +136,13 @@ class Mask2FormerOccHead(MaskFormerHead):
         norm_kitti_class_weights = (kitti_class_weights / kitti_class_weights[0]).tolist()
         # add background weight at the end to align with num_classes + 1 logits
         self.class_weight = norm_kitti_class_weights + [1.0]
-        loss_cls.class_weight = self.class_weight
+
+        # Only set class_weight if loss_cls is a dict and doesn't have its own balancing
+        # (e.g., skip for FocalLoss which handles balancing internally)
+        if isinstance(loss_cls, dict) and 'class_weight' in loss_cls:
+            loss_cls['class_weight'] = self.class_weight
+        elif hasattr(loss_cls, 'class_weight'):
+            loss_cls.class_weight = self.class_weight
         
         # computing sampling weight        
         sample_weights = 1 / freq

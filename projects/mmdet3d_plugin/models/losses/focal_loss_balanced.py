@@ -1,7 +1,4 @@
-"""
-Focal Loss with automatic class balancing for occupancy prediction.
-Solves extreme class imbalance (95% free space vs <1% rare classes).
-"""
+"""Focal loss used for occupancy classification."""
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
@@ -10,21 +7,7 @@ from mmdet.models.builder import LOSSES
 
 @LOSSES.register_module()
 class FocalLossBalanced(nn.Module):
-    """Focal Loss with automatic class weighting for imbalanced occupancy data.
-
-    This loss addresses two problems:
-    1. Extreme class imbalance (free space dominates)
-    2. Hard examples being overwhelmed by easy examples
-
-    Args:
-        alpha (float or list): Weighting factor in [0, 1] to balance positive/negative examples,
-            or a list of weights for each class. Default: None (auto-compute)
-        gamma (float): Exponent of the modulating factor (1 - p_t)^gamma. Default: 2.0
-        reduction (str): 'none' | 'mean' | 'sum'. Default: 'mean'
-        loss_weight (float): Weight of the loss. Default: 1.0
-        auto_balance (bool): Automatically compute class weights from batch statistics. Default: True
-        ignore_index (int): Specifies a target value that is ignored. Default: 255
-    """
+    """Focal loss with optional running class weights."""
 
     def __init__(self,
                  alpha=None,
@@ -57,11 +40,7 @@ class FocalLossBalanced(nn.Module):
             self.register_buffer('update_count', torch.tensor(0, dtype=torch.long))
 
     def update_class_weights(self, targets):
-        """Update running class statistics for auto-balancing.
-
-        Args:
-            targets (Tensor): Ground truth labels [N]
-        """
+        """Update running class statistics for auto-balancing."""
         if not self.auto_balance or not self.training:
             return
 
@@ -75,7 +54,7 @@ class FocalLossBalanced(nn.Module):
 
         self.update_count += 1
 
-        # Recompute alpha every 100 updates
+        # Recompute alpha every N updates
         if self.update_count % 100 == 0:
             total = self.class_counts.sum()
             if total > 0:
@@ -89,23 +68,15 @@ class FocalLossBalanced(nn.Module):
                 weights = torch.clamp(weights, min=0.1, max=10.0)
                 self.alpha_t = weights
 
-    def forward(self, pred, target):
-        """Forward function.
+    def forward(self, pred, target, weight=None, avg_factor=None, reduction_override=None):
+        """Compute focal loss."""
 
-        Args:
-            pred (Tensor): Predicted logits [N, C] or [N, C, H, W, D]
-            target (Tensor): Ground truth labels [N] or [N, H, W, D]
-
-        Returns:
-            Tensor: Calculated focal loss
-        """
-        # Reshape inputs if needed
-        if pred.dim() == 5:  # [N, C, H, W, D]
+        if pred.dim() == 2:  # [N, C] (Mask2Former samples points before loss)
+            pass
+        elif pred.dim() == 5:  # [N, C, H, W, D] dense logits (not typical for this head)
             N, C, H, W, D = pred.shape
             pred = pred.permute(0, 2, 3, 4, 1).reshape(-1, C)  # [N*H*W*D, C]
             target = target.reshape(-1)  # [N*H*W*D]
-        elif pred.dim() == 2:  # [N, C]
-            pass
         else:
             raise ValueError(f"Unsupported pred shape: {pred.shape}")
 
@@ -117,30 +88,46 @@ class FocalLossBalanced(nn.Module):
         if not valid_mask.any():
             return pred.sum() * 0.0  # Return zero loss if all ignored
 
-        pred = pred[valid_mask]
-        target = target[valid_mask]
+        pred_valid = pred[valid_mask]
+        target_valid = target[valid_mask]
 
-        # Get class probabilities
-        p = F.softmax(pred, dim=-1)  # [N, C]
-        ce_loss = F.cross_entropy(pred, target, reduction='none')  # [N]
+        # Apply sample-wise weight if provided
+        if weight is not None:
+            weight_valid = weight[valid_mask]
+        else:
+            weight_valid = None
 
-        # Get probability of true class
-        p_t = p[torch.arange(len(target)), target]  # [N]
+        # CE term
+        ce_loss = F.cross_entropy(pred_valid, target_valid, reduction='none')  # [N]
 
-        # Focal modulation term: (1 - p_t)^gamma
-        focal_weight = (1 - p_t) ** self.gamma
+        # Compute p_t without storing full softmax.
+        log_p = F.log_softmax(pred_valid, dim=-1)  # [N, C]
+        log_p_t = log_p[torch.arange(len(target_valid)), target_valid]  # [N]
+        p_t = torch.exp(log_p_t)  # [N]
+        del log_p, log_p_t
+
+        focal_weight = (1 - p_t).pow_(self.gamma)
+        del p_t
 
         # Apply alpha balancing if available
         if self.alpha_t is not None:
-            alpha_t = self.alpha_t[target]  # [N]
+            alpha_t = self.alpha_t[target_valid]  # [N]
             loss = alpha_t * focal_weight * ce_loss
         else:
             loss = focal_weight * ce_loss
 
+        # Apply sample-wise weight
+        if weight_valid is not None:
+            loss = loss * weight_valid
+
         # Apply reduction
-        if self.reduction == 'mean':
-            loss = loss.mean()
-        elif self.reduction == 'sum':
+        reduction = reduction_override if reduction_override else self.reduction
+        if reduction == 'mean':
+            if avg_factor is not None:
+                loss = loss.sum() / avg_factor
+            else:
+                loss = loss.mean()
+        elif reduction == 'sum':
             loss = loss.sum()
         # else: 'none', return as-is
 
@@ -156,13 +143,7 @@ class FocalLossBalanced(nn.Module):
 
 @LOSSES.register_module()
 class OccupancyFocalLoss(FocalLossBalanced):
-    """Convenience wrapper with sensible defaults for occupancy prediction.
-
-    Compared to standard FocalLoss:
-    - Auto-balancing enabled by default
-    - Higher gamma (2.5) for harder focusing
-    - Ignores index 255 by default
-    """
+    """Wrapper with defaults used by this repo."""
 
     def __init__(self,
                  gamma=2.5,
