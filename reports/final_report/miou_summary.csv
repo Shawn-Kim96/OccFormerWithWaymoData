@@ -1,0 +1,5 @@
+experiment,mIoU
+baseline_fast,13.41
+strong_aug,12.43
+sgd,11.97
+lr_5e4,7.29
