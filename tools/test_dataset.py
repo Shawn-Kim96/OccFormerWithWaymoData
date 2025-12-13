@@ -33,10 +33,10 @@ def test_dataset():
     # Build dataset
     try:
         dataset = build_dataset(cfg.data.train)
-        print(f"✓ Dataset created successfully")
+        print("Dataset created successfully")
         print(f"  Dataset length: {len(dataset)}")
     except Exception as e:
-        print(f"✗ Failed to create dataset: {e}")
+        print(f"Failed to create dataset: {e}")
         import traceback
         traceback.print_exc()
         return
@@ -68,11 +68,11 @@ def test_dataset():
         try:
             data = dataset[0]
             signal.alarm(0)  # Cancel alarm
-            print(f"✓ First sample loaded successfully")
+            print("First sample loaded successfully")
             print(f"  Keys: {data.keys() if hasattr(data, 'keys') else 'N/A'}")
         except TimeoutError as e:
             signal.alarm(0)
-            print(f"✗ TIMEOUT: {e}")
+            print(f"TIMEOUT: {e}")
             print("\nThis suggests the data loading is stuck in:")
             print("  - Image file reading")
             print("  - Point cloud processing")
@@ -84,7 +84,7 @@ def test_dataset():
             return
 
     except Exception as e:
-        print(f"✗ Failed to load first sample: {e}")
+        print(f"Failed to load first sample: {e}")
         import traceback
         traceback.print_exc()
         return

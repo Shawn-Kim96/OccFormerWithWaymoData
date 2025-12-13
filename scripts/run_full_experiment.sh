@@ -5,8 +5,8 @@
 #SBATCH --nodes=1
 #SBATCH --ntasks-per-node=1
 #SBATCH --cpus-per-task=8
-#SBATCH --mem=32G
-#SBATCH --partition=gpuql
+#SBATCH --mem=16G
+#SBATCH --partition=condo
 
 # Train + evaluate (and optionally visualize) a Waymo experiment.
 # Usage: sbatch scripts/run_full_experiment.sh <exp_name>

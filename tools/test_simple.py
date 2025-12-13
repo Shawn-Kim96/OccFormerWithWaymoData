@@ -17,7 +17,7 @@ print("STEP 1: Loading config...")
 start = time.time()
 cfg = Config.fromfile('projects/configs/occformer_waymo/waymo_base.py')
 cfg.data.train.load_interval = 100
-print(f"✓ Config loaded in {time.time()-start:.2f}s")
+print(f"Config loaded in {time.time()-start:.2f}s")
 
 print("\n" + "="*80)
 print("STEP 2: Creating dataset (NO pipeline)...")
@@ -30,10 +30,10 @@ dataset_cfg['pipeline'] = []  # Remove pipeline
 from mmdet3d.datasets import build_dataset
 try:
     dataset = build_dataset(dataset_cfg)
-    print(f"✓ Dataset created in {time.time()-start:.2f}s")
+    print(f"Dataset created in {time.time()-start:.2f}s")
     print(f"  Length: {len(dataset)}")
 except Exception as e:
-    print(f"✗ Failed: {e}")
+    print(f"Failed: {e}")
     import traceback
     traceback.print_exc()
     sys.exit(1)
@@ -50,15 +50,15 @@ dataset_cfg['pipeline'] = [
 
 try:
     dataset = build_dataset(dataset_cfg)
-    print(f"✓ Dataset with LoadImage created in {time.time()-start:.2f}s")
+    print(f"Dataset with LoadImage created in {time.time()-start:.2f}s")
 
     print("\nSTEP 4: Loading first sample (image only)...")
     start = time.time()
     data = dataset[0]
-    print(f"✓ First sample loaded in {time.time()-start:.2f}s")
+    print(f"First sample loaded in {time.time()-start:.2f}s")
 
 except Exception as e:
-    print(f"✗ Failed: {e}")
+    print(f"Failed: {e}")
     import traceback
     traceback.print_exc()
     sys.exit(1)
@@ -70,20 +70,20 @@ start = time.time()
 dataset_cfg['pipeline'] = cfg.train_pipeline
 try:
     dataset = build_dataset(dataset_cfg)
-    print(f"✓ Dataset with full pipeline created in {time.time()-start:.2f}s")
+    print(f"Dataset with full pipeline created in {time.time()-start:.2f}s")
 
     print("\nLoading first sample (full pipeline)...")
     start = time.time()
     data = dataset[0]
-    print(f"✓ First sample loaded in {time.time()-start:.2f}s")
+    print(f"First sample loaded in {time.time()-start:.2f}s")
 
     print("\n" + "="*80)
     print("SUCCESS! All tests passed.")
     print("="*80)
 
 except Exception as e:
-    print(f"✗ Failed at full pipeline: {e}")
+    print(f"Failed at full pipeline: {e}")
     import traceback
     traceback.print_exc()
-    print("\n⚠️  The bottleneck is in the full pipeline!")
-    print("   Likely culprit: CreateDepthFromLiDAR or LoadSemKittiAnnotation")
+    print("\nThe bottleneck is in the full pipeline.")
+    print("Likely culprit: CreateDepthFromLiDAR or LoadSemKittiAnnotation")

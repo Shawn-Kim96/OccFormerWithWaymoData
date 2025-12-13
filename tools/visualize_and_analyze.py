@@ -1,13 +1,5 @@
 #!/usr/bin/env python
-"""
-Complete Visualization and Analysis Tool for Waymo Occupancy Results
-Generates:
-1. Video visualizations (BEV + 3D)
-2. Per-class IoU analysis
-3. Confusion matrix
-4. Failure case detection
-5. Statistical reports
-"""
+"""Inference-time visualization and basic analysis for Waymo occupancy."""
 import os
 import sys
 import argparse

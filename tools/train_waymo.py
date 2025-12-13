@@ -1,17 +1,13 @@
-"""
-Waymo Training Script with Experiment Management
-Supports:
-- Multiple experiment configurations
-- Sample testing mode
-- Auto-resume from checkpoints
-- Organized output structure
-"""
+"""Waymo training entry point with experiment presets."""
 
 import argparse
 import os
 import sys
 import copy
 import torch
+
+# Optional: reduce CUDA allocator fragmentation.
+# os.environ['PYTORCH_CUDA_ALLOC_CONF'] = 'max_split_size_mb:20'
 
 # Add project root to path
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
@@ -65,15 +61,23 @@ def apply_experiment_config(cfg, exp_config):
     if 'data_config' in exp_config:
         cfg.data_config = exp_config['data_config']
 
-    # Model backbone
+    # Model backbone (mmcv Config: update keys explicitly)
     if 'model_backbone' in exp_config:
-        cfg.model.img_backbone = exp_config['model_backbone']
+        backbone_cfg = exp_config['model_backbone']
+        for key, value in backbone_cfg.items():
+            if key == 'init_cfg':
+                # Handle nested dict
+                for init_key, init_value in value.items():
+                    cfg.model.img_backbone.init_cfg[init_key] = init_value
+            else:
+                cfg.model.img_backbone[key] = value
 
     # Model neck
     if 'model_neck_in_channels' in exp_config:
-        cfg.model.img_neck.in_channels = exp_config['model_neck_in_channels']
+        # Update list by replacing elements
+        cfg.model.img_neck['in_channels'] = exp_config['model_neck_in_channels']
     if 'model_neck_upsample_strides' in exp_config:
-        cfg.model.img_neck.upsample_strides = exp_config['model_neck_upsample_strides']
+        cfg.model.img_neck['upsample_strides'] = exp_config['model_neck_upsample_strides']
 
     # Optimizer
     if 'optimizer' in exp_config:
@@ -92,6 +96,10 @@ def apply_experiment_config(cfg, exp_config):
     if 'samples_per_gpu' in exp_config:
         cfg.data.samples_per_gpu = exp_config['samples_per_gpu']
 
+    # Optimizer config (for gradient accumulation, etc.)
+    if 'optimizer_config' in exp_config:
+        cfg.optimizer_config = exp_config['optimizer_config']
+
     # Sample test mode
     if 'data_train_load_interval' in exp_config:
         cfg.data.train.load_interval = exp_config['data_train_load_interval']
@@ -101,8 +109,6 @@ def apply_experiment_config(cfg, exp_config):
         cfg.data.test.load_interval = exp_config['data_test_load_interval']
     if 'evaluation_interval' in exp_config:
         cfg.evaluation.interval = exp_config['evaluation_interval']
-
-    # ===== NEW: Improved experiment configs =====
 
     # Use Waymo-specific loader with resizing
     if exp_config.get('use_waymo_loader', False):
@@ -141,6 +147,7 @@ def apply_experiment_config(cfg, exp_config):
 
     # Use focal loss for class imbalance
     if exp_config.get('use_focal_loss', False):
+        # Build loss configuration - Focal Loss handles class balancing internally
         cfg.model.pts_bbox_head.loss_cls = dict(
             type='OccupancyFocalLoss',
             gamma=2.5,
@@ -149,6 +156,17 @@ def apply_experiment_config(cfg, exp_config):
             ignore_index=255,
             num_classes=len(cfg.class_names)
         )
+    # Use weighted CrossEntropy for class imbalance (more memory efficient than focal loss)
+    elif exp_config.get('use_class_weights', False):
+        class_weights = exp_config.get('class_weights', None)
+        if class_weights is not None:
+            cfg.model.pts_bbox_head.loss_cls = dict(
+                type='CrossEntropyLoss',
+                use_sigmoid=False,
+                loss_weight=2.0,
+                reduction='mean',
+                class_weight=class_weights
+            )
 
     return cfg
 
@@ -156,8 +174,29 @@ def apply_experiment_config(cfg, exp_config):
 def main():
     args = parse_args()
 
+    # Clear CUDA cache before starting (helps when jobs reuse GPUs)
+    if torch.cuda.is_available():
+        torch.cuda.empty_cache()
+        torch.cuda.synchronize()
+        import gc
+        gc.collect()
+        torch.cuda.empty_cache()
+
+        # Deterministic cudnn can reduce variability in memory use
+        torch.backends.cudnn.deterministic = True
+        torch.backends.cudnn.benchmark = False
+
     # Load base config
     cfg = Config.fromfile(args.config)
+
+    # Auto-detect available GPUs and override config
+    if torch.cuda.is_available():
+        num_gpus = torch.cuda.device_count()
+        cfg.gpu_ids = list(range(num_gpus))
+        print(f"Detected {num_gpus} GPU(s): {cfg.gpu_ids}")
+    else:
+        cfg.gpu_ids = []
+        print("No GPUs detected, using CPU")
 
     # Get experiment configuration
     exp_config, description = get_config(args.exp_name, args.sample_test)
@@ -219,6 +258,22 @@ def main():
     if cfg.get('resume_from'):
         logger.info(f'Resume from: {cfg.resume_from}')
     logger.info('=' * 80)
+
+    # Debug: Log model backbone configuration
+    logger.info('Model backbone configuration:')
+    logger.info(f'  Type: {cfg.model.img_backbone.type}')
+    logger.info(f'  Arch: {cfg.model.img_backbone.arch}')
+    logger.info(f'  Checkpoint: {cfg.model.img_backbone.init_cfg.checkpoint}')
+    logger.info('Model neck configuration:')
+    logger.info(f'  In channels: {cfg.model.img_neck.in_channels}')
+
+    # Debug: Log pipeline configuration
+    logger.info('Train pipeline:')
+    for i, step in enumerate(cfg.train_pipeline):
+        logger.info(f'  [{i}] {step.get("type", "unknown")}')
+    logger.info('Test pipeline:')
+    for i, step in enumerate(cfg.test_pipeline):
+        logger.info(f'  [{i}] {step.get("type", "unknown")}')
 
     # Log config (skip pretty_text to avoid yapf issues)
     logger.info(f'Config file: {args.config}')

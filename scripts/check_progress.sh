@@ -49,9 +49,9 @@ for exp in "${EXPERIMENTS[@]}"; do
         EVAL_LOG="${EXP_DIR}/logs/eval_*.log"
         if [ -f ${EVAL_LOG} ]; then
             FINAL_MIOU=$(grep "mIoU" ${EVAL_LOG} | tail -1 | grep -oP 'mIoU: \K[0-9.]+' || echo "?")
-            echo "${exp}: ✓ Completed, Final mIoU: ${FINAL_MIOU}"
+            echo "${exp}: Completed, Final mIoU: ${FINAL_MIOU}"
         else
-            echo "${exp}: ✓ Completed"
+            echo "${exp}: Completed"
         fi
     else
         echo "${exp}: Queued or failed"
