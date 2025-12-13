@@ -1,8 +1,5 @@
 #!/usr/bin/env python
-"""
-Download ResNet-101 pretrained weights for offline use on HPC
-Run this on a machine with internet access
-"""
+"""Download ResNet-101 pretrained weights for offline HPC use."""
 
 import torch
 import torchvision
@@ -26,7 +23,7 @@ torch.save(model.state_dict(), output_path)
 
 # Check file
 file_size = os.path.getsize(output_path) / (1024 * 1024)  # MB
-print(f"✓ ResNet-101 downloaded: {output_path}")
+print(f"Saved ResNet-101 weights: {output_path}")
 print(f"  Size: {file_size:.1f} MB")
 print("")
 print("=" * 60)
