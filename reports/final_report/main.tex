@@ -34,7 +34,7 @@
 \section*{Abstract}
 This project began as a fork of the public OccFormer codebase and ended as a working Waymo occupancy pipeline inside MMDetection3D: dataset loading, training/evaluation scripts, and a qualitative video demo.
 Most of the work was integration and debugging rather than changing the core model. The main friction points were aligning Waymo KITTI-format sensor exports with Occ3D-Waymo occupancy labels, fixing label conventions (free-space label), dealing with the fact that Waymo GT volumes are commonly 200$\times$200$\times$16 while the default model grid is 256$\times$256$\times$32, and keeping training stable on a single 12\,GB GPU.
-The best run that completed end-to-end in this repo is \texttt{baseline\_fast} (10\% data via \texttt{load\_interval=10}, EfficientNet-B7, CrossEntropy), which reached 13.41 mIoU on the validation set based on the printed IoU table in \texttt{results/baseline\_fast/logs/evaluate.log}.
+The best run that completed end-to-end in this repo is \texttt{baseline} (10\% data via \texttt{load\_interval=10}, EfficientNet-B7, CrossEntropy), which reached 13.41 mIoU on the validation set based on the printed IoU table in \texttt{results/baseline\_fast/logs/evaluate.log}.
 Additional experiments included stronger augmentation, learning-rate changes, SGD, and multiple imbalance variants (focal loss, weighted CE, fewer Mask2Former queries). Several runs failed for concrete engineering reasons (registry import order, wrong image loader, SLURM environment issues, and CUDA out-of-memory), and this report documents those failures with log excerpts and the specific files modified.
 
 \section{Introduction \& Problem Description}
@@ -90,15 +90,15 @@ The overall layout follows the standard MMDetection3D project structure (model c
 
 \begin{lstlisting}
 OccFormerWithWaymoData/
-  mmdetection3d/            # upstream framework (MMDet3D)
+  mmdetection3d/              # upstream framework (MMDet3D)
   projects/
-    mmdet3d_plugin/         # OccFormer + datasets/losses/pipelines
-    configs/occformer_waymo/# Waymo configs + experiment presets
-  tools/                    # runnable entry points
-  scripts/                  # SLURM wrappers and quick checks
-  data/                     # Waymo data, exports, occupancy GT
-  results/                  # experiment outputs
-  reports/final_report/     # LaTeX report + figures
+    mmdet3d_plugin/           # OccFormer + datasets/losses/pipelines
+    configs/occformer_waymo/  # Waymo configs + experiment presets
+  tools/                      # runnable entry points
+  scripts/                    # SLURM wrappers and quick checks
+  data/                       # Waymo data, exports, occupancy GT
+  results/                    # experiment outputs
+  reports/final_report/       # LaTeX report + figures
 \end{lstlisting}
 
 From the original OccFormer fork, the main additions in this class project are:
