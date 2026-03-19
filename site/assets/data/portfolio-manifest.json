@@ -1,0 +1,484 @@
+{
+  "generated_at": "2026-03-19T07:42:23.272913+00:00",
+  "repo": {
+    "name": "OccFormerWithWaymoData",
+    "path": "/Users/shawn/Documents/sjsu/2025-2/ia/OccFormerWithWaymoData/.omx/team/execute-users-shawn-documents/worktrees/worker-1",
+    "source_context": null
+  },
+  "project": {
+    "title": "OccFormer on Waymo",
+    "subtitle": "Camera-only 3D semantic occupancy on Waymo, adapted from OccFormer and hardened into a reproducible MMDetection3D pipeline under a single 12 GB GPU budget.",
+    "summary": "This portfolio page condenses the repo's report, configs, figures, and scripts into a single public-facing research case study with deterministic asset generation and static deployment.",
+    "best_experiment": {
+      "experiment": "baseline_fast",
+      "mIoU": "13.41"
+    },
+    "experiments": [
+      {
+        "experiment": "baseline_fast",
+        "mIoU": "13.41"
+      },
+      {
+        "experiment": "strong_aug",
+        "mIoU": "12.43"
+      },
+      {
+        "experiment": "sgd",
+        "mIoU": "11.97"
+      },
+      {
+        "experiment": "lr_5e4",
+        "mIoU": "7.29"
+      }
+    ],
+    "experiment_settings": [
+      {
+        "experiment": "baseline",
+        "backbone": "EfficientNet-B7",
+        "loss": "CrossEntropy",
+        "optimizer": "AdamW",
+        "lr": "1.0e-04",
+        "epochs": "30",
+        "queries": "100",
+        "occ_size": "256\u00d7256\u00d732",
+        "gt_resize": "-",
+        "input_size": "640\u00d7960",
+        "load_interval": "10",
+        "samples_per_gpu": "1",
+        "val_interval": "0"
+      },
+      {
+        "experiment": "efficientnet_b4",
+        "backbone": "EfficientNet-B4",
+        "loss": "CrossEntropy",
+        "optimizer": "AdamW",
+        "lr": "1.0e-04",
+        "epochs": "30",
+        "queries": "100",
+        "occ_size": "256\u00d7256\u00d732",
+        "gt_resize": "-",
+        "input_size": "640\u00d7960",
+        "load_interval": "10",
+        "samples_per_gpu": "2",
+        "val_interval": "0"
+      },
+      {
+        "experiment": "improved_fast",
+        "backbone": "EfficientNet-B7",
+        "loss": "Focal",
+        "optimizer": "AdamW",
+        "lr": "1.0e-04",
+        "epochs": "30",
+        "queries": "100",
+        "occ_size": "256\u00d7256\u00d732",
+        "gt_resize": "256\u00d7256\u00d732",
+        "input_size": "640\u00d7960",
+        "load_interval": "10",
+        "samples_per_gpu": "1",
+        "val_interval": "0"
+      },
+      {
+        "experiment": "improved_imbalance",
+        "backbone": "EfficientNet-B4",
+        "loss": "Weighted CE",
+        "optimizer": "AdamW",
+        "lr": "1.0e-04",
+        "epochs": "30",
+        "queries": "100",
+        "occ_size": "256\u00d7256\u00d732",
+        "gt_resize": "-",
+        "input_size": "640\u00d7960",
+        "load_interval": "10",
+        "samples_per_gpu": "1",
+        "val_interval": "0"
+      },
+      {
+        "experiment": "improved_imbalance_q30",
+        "backbone": "EfficientNet-B4",
+        "loss": "Weighted CE",
+        "optimizer": "AdamW",
+        "lr": "1.0e-04",
+        "epochs": "30",
+        "queries": "30",
+        "occ_size": "256\u00d7256\u00d732",
+        "gt_resize": "-",
+        "input_size": "640\u00d7960",
+        "load_interval": "10",
+        "samples_per_gpu": "1",
+        "val_interval": "0"
+      },
+      {
+        "experiment": "improved_small_grid",
+        "backbone": "EfficientNet-B4",
+        "loss": "Focal",
+        "optimizer": "AdamW",
+        "lr": "1.0e-04",
+        "epochs": "35",
+        "queries": "100",
+        "occ_size": "200\u00d7200\u00d716",
+        "gt_resize": "Native",
+        "input_size": "480\u00d7720",
+        "load_interval": "10",
+        "samples_per_gpu": "1",
+        "val_interval": "5"
+      },
+      {
+        "experiment": "lr_5e4",
+        "backbone": "EfficientNet-B7",
+        "loss": "CrossEntropy",
+        "optimizer": "AdamW",
+        "lr": "5.0e-04",
+        "epochs": "30",
+        "queries": "100",
+        "occ_size": "256\u00d7256\u00d732",
+        "gt_resize": "-",
+        "input_size": "640\u00d7960",
+        "load_interval": "10",
+        "samples_per_gpu": "1",
+        "val_interval": "0"
+      },
+      {
+        "experiment": "sgd",
+        "backbone": "EfficientNet-B7",
+        "loss": "CrossEntropy",
+        "optimizer": "SGD",
+        "lr": "1.0e-02",
+        "epochs": "30",
+        "queries": "100",
+        "occ_size": "256\u00d7256\u00d732",
+        "gt_resize": "-",
+        "input_size": "640\u00d7960",
+        "load_interval": "10",
+        "samples_per_gpu": "1",
+        "val_interval": "0"
+      },
+      {
+        "experiment": "strong_aug",
+        "backbone": "EfficientNet-B7",
+        "loss": "CrossEntropy",
+        "optimizer": "AdamW",
+        "lr": "1.0e-04",
+        "epochs": "35",
+        "queries": "100",
+        "occ_size": "256\u00d7256\u00d732",
+        "gt_resize": "-",
+        "input_size": "640\u00d7960",
+        "load_interval": "10",
+        "samples_per_gpu": "1",
+        "val_interval": "0"
+      }
+    ]
+  },
+  "source_matrix": [
+    {
+      "section": "Hero",
+      "description": "Derived reel from report figures and experiment metrics",
+      "sources": [
+        "system_architecture",
+        "occformer_framework",
+        "miou_by_experiment",
+        "per_class_baseline_fast"
+      ]
+    },
+    {
+      "section": "Method",
+      "description": "System diagrams from final report",
+      "sources": [
+        "system_architecture",
+        "occformer_framework"
+      ]
+    },
+    {
+      "section": "Results",
+      "description": "Evaluation charts regenerated from report assets",
+      "sources": [
+        "miou_by_experiment",
+        "per_class_all",
+        "per_class_baseline_fast"
+      ]
+    },
+    {
+      "section": "Reproducibility",
+      "description": "Commands and links from report + repo",
+      "sources": [
+        "report_pdf"
+      ]
+    }
+  ],
+  "required_sections": [
+    "hero",
+    "overview",
+    "method",
+    "results",
+    "engineering",
+    "reproducibility"
+  ],
+  "assets": [
+    {
+      "key": "system_architecture",
+      "role": "architecture_image",
+      "title": "System architecture",
+      "section": "method",
+      "source": "reports/final_report/figures/system_architecture.png",
+      "path": "assets/media/system_architecture.png",
+      "kind": "image",
+      "alt_text": "System architecture",
+      "caption": "The repo's pipeline spans data alignment, dataset hooks, training/evaluation, and artifact generation.",
+      "width": 3558,
+      "height": 1382,
+      "duration_seconds": null,
+      "size_bytes": 740177
+    },
+    {
+      "key": "occformer_framework",
+      "role": "framework_image",
+      "title": "OccFormer framework",
+      "section": "method",
+      "source": "reports/final_report/figures/occformer_framework.jpg",
+      "path": "assets/media/occformer_framework.jpg",
+      "kind": "image",
+      "alt_text": "OccFormer framework",
+      "caption": "OccFormer's view transformation and 3D reasoning stack, reused as the backbone of the Waymo adaptation.",
+      "width": 2234,
+      "height": 857,
+      "duration_seconds": null,
+      "size_bytes": 1044940
+    },
+    {
+      "key": "miou_by_experiment",
+      "role": "experiment_chart",
+      "title": "mIoU by experiment",
+      "section": "results",
+      "source": "reports/final_report/figures/miou_by_experiment.png",
+      "path": "assets/media/miou_by_experiment.png",
+      "kind": "image",
+      "alt_text": "mIoU by experiment",
+      "caption": "Completed runs show baseline_fast leading the available validation experiments.",
+      "width": 1600,
+      "height": 800,
+      "duration_seconds": null,
+      "size_bytes": 64325
+    },
+    {
+      "key": "per_class_all",
+      "role": "per_class_chart",
+      "title": "Per-class IoU across experiments",
+      "section": "results",
+      "source": "reports/final_report/figures/per_class_all.png",
+      "path": "assets/media/per_class_all.png",
+      "kind": "image",
+      "alt_text": "Per-class IoU across experiments",
+      "caption": "Cross-experiment comparison highlights class imbalance and geometry sensitivity.",
+      "width": 1184,
+      "height": 584,
+      "duration_seconds": null,
+      "size_bytes": 100564
+    },
+    {
+      "key": "per_class_baseline_fast",
+      "role": "per_class_detail_chart",
+      "title": "Per-class IoU for baseline_fast",
+      "section": "results",
+      "source": "reports/final_report/figures/per_class_baseline_fast.png",
+      "path": "assets/media/per_class_baseline_fast.png",
+      "kind": "image",
+      "alt_text": "Per-class IoU for baseline_fast",
+      "caption": "The strongest completed run still shows the typical occupancy gap between common and rare classes.",
+      "width": 2000,
+      "height": 900,
+      "duration_seconds": null,
+      "size_bytes": 122633
+    },
+    {
+      "key": "hero_reel",
+      "role": "hero_video",
+      "title": "Hero reel",
+      "section": "hero",
+      "source": "Derived from reports/final_report/figures/*",
+      "path": "assets/media/hero-reel.mp4",
+      "kind": "video",
+      "alt_text": "Hero video summarizing architecture and results slides",
+      "caption": "A lightweight autoplay reel built from repo-backed report figures for GitHub Pages delivery.",
+      "width": 1280,
+      "height": 720,
+      "duration_seconds": 8.0,
+      "size_bytes": 4281690
+    },
+    {
+      "key": "hero_poster",
+      "role": "hero_poster",
+      "title": "Hero poster",
+      "section": "hero",
+      "source": "Derived from reports/final_report/figures/system_architecture.png",
+      "path": "assets/media/hero-poster.jpg",
+      "kind": "image",
+      "alt_text": "Poster frame for the hero reel",
+      "caption": "Poster frame for browsers or bandwidth conditions where autoplay is unavailable.",
+      "width": 1280,
+      "height": 720,
+      "duration_seconds": null,
+      "size_bytes": 172756
+    },
+    {
+      "key": "final_report_pdf",
+      "role": "report_pdf",
+      "title": "Final report PDF",
+      "section": "reproducibility",
+      "source": "reports/final_report/main.pdf",
+      "path": "assets/docs/final-report.pdf",
+      "kind": "document",
+      "alt_text": "Final report PDF",
+      "caption": "The full write-up used as the narrative source for this portfolio page.",
+      "width": null,
+      "height": null,
+      "duration_seconds": null,
+      "size_bytes": 1769053
+    }
+  ],
+  "narrative": {
+    "overview": "This portfolio page condenses the repo's report, configs, figures, and scripts into a single public-facing research case study with deterministic asset generation and static deployment.",
+    "method": "The system lifts five synchronized camera views into a voxel-aligned 3D representation, runs dual-path 3D reasoning, and predicts a 16-class occupancy grid over Waymo scenes.",
+    "results": "The best completed baseline_fast run reached 13.41 mIoU on the validation split while operating on 10% data slices for practical iteration speed.",
+    "engineering": "Most of the work was systems integration: data alignment, label remapping, voxel-grid mismatch repair, memory pressure reduction, and workflow stabilization on HPC nodes.",
+    "repro_commands": [
+      "conda activate occformer307",
+      "export PYTHONPATH=$(pwd):$PYTHONPATH",
+      "sbatch scripts/run_experiment.sh baseline_fast",
+      "python tools/test.py projects/configs/occformer_waymo/waymo_base.py results/baseline_fast/model/latest.pth --eval mIoU --launcher none",
+      "python tools/build_portfolio_site.py --output-dir site",
+      "python tools/validate_portfolio_site.py --site-dir site --strict"
+    ],
+    "engineering_challenges": [
+      {
+        "title": "Loader mismatch",
+        "body": "Swapped nuScenes-style assumptions for a Waymo/KITTI-compatible multiview loader so image tensors and metadata line up with the occupancy pipeline."
+      },
+      {
+        "title": "Pose ordering",
+        "body": "Corrected a silent two-camera pose mismatch that otherwise corrupts feature lifting without always crashing training."
+      },
+      {
+        "title": "Free-space labels",
+        "body": "Remapped Occ3D-Waymo free-space label 23 to the repo's class index 15 so supervision and evaluation agree."
+      },
+      {
+        "title": "Voxel grid alignment",
+        "body": "Handled 200\u00d7200\u00d716 ground truth against 256\u00d7256\u00d732 model outputs with explicit resizing safeguards for training and visualization."
+      },
+      {
+        "title": "12 GB GPU ceiling",
+        "body": "Reduced query counts, used faster presets, and documented failure modes caused by large [B,Q,H,W,D] occupancy tensors."
+      }
+    ],
+    "per_class_rows_sample": [
+      {
+        "": "0",
+        "class": "general_object",
+        "iou": "0.0",
+        "experiment": "baseline_fast"
+      },
+      {
+        "": "1",
+        "class": "vehicle",
+        "iou": "18.69",
+        "experiment": "baseline_fast"
+      },
+      {
+        "": "2",
+        "class": "pedestrian",
+        "iou": "9.61",
+        "experiment": "baseline_fast"
+      },
+      {
+        "": "3",
+        "class": "sign",
+        "iou": "1.79",
+        "experiment": "baseline_fast"
+      },
+      {
+        "": "4",
+        "class": "cyclist",
+        "iou": "7.22",
+        "experiment": "baseline_fast"
+      },
+      {
+        "": "5",
+        "class": "traffic_light",
+        "iou": "0.68",
+        "experiment": "baseline_fast"
+      },
+      {
+        "": "6",
+        "class": "pole",
+        "iou": "4.34",
+        "experiment": "baseline_fast"
+      },
+      {
+        "": "7",
+        "class": "construction_cone",
+        "iou": "4.05",
+        "experiment": "baseline_fast"
+      },
+      {
+        "": "8",
+        "class": "bicycle",
+        "iou": "1.04",
+        "experiment": "baseline_fast"
+      },
+      {
+        "": "9",
+        "class": "motorcycle",
+        "iou": "0.0",
+        "experiment": "baseline_fast"
+      },
+      {
+        "": "10",
+        "class": "building",
+        "iou": "8.08",
+        "experiment": "baseline_fast"
+      },
+      {
+        "": "11",
+        "class": "vegetation",
+        "iou": "7.78",
+        "experiment": "baseline_fast"
+      },
+      {
+        "": "12",
+        "class": "tree_trunk",
+        "iou": "3.52",
+        "experiment": "baseline_fast"
+      },
+      {
+        "": "13",
+        "class": "road",
+        "iou": "35.56",
+        "experiment": "baseline_fast"
+      },
+      {
+        "": "14",
+        "class": "walkable",
+        "iou": "20.1",
+        "experiment": "baseline_fast"
+      },
+      {
+        "": "15",
+        "class": "free",
+        "iou": "92.02",
+        "experiment": "baseline_fast"
+      },
+      {
+        "": "16",
+        "class": "mIoU",
+        "iou": "13.41",
+        "experiment": "baseline_fast"
+      },
+      {
+        "": "0",
+        "class": "general_object",
+        "iou": "0.0",
+        "experiment": "strong_aug"
+      }
+    ]
+  }
+}

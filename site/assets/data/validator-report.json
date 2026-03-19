@@ -1,0 +1,75 @@
+{
+  "site_dir": "site",
+  "technical": {
+    "pass": true,
+    "score": 100,
+    "missing_roles": [],
+    "missing_sections": [],
+    "missing_targets": [],
+    "corrupt_assets": [],
+    "broken_local_links": []
+  },
+  "quality": {
+    "score": 100.0,
+    "categories": {
+      "clarity": 5,
+      "correctness": 5,
+      "coverage": 5,
+      "usefulness": 5
+    }
+  },
+  "composite_score": 100.0,
+  "threshold_pass": true,
+  "checks": [
+    {
+      "path": "assets/media/system_architecture.png",
+      "kind": "image",
+      "width": 3558,
+      "height": 1382
+    },
+    {
+      "path": "assets/media/occformer_framework.jpg",
+      "kind": "image",
+      "width": 2234,
+      "height": 857
+    },
+    {
+      "path": "assets/media/miou_by_experiment.png",
+      "kind": "image",
+      "width": 1600,
+      "height": 800
+    },
+    {
+      "path": "assets/media/per_class_all.png",
+      "kind": "image",
+      "width": 1184,
+      "height": 584
+    },
+    {
+      "path": "assets/media/per_class_baseline_fast.png",
+      "kind": "image",
+      "width": 2000,
+      "height": 900
+    },
+    {
+      "path": "assets/media/hero-reel.mp4",
+      "kind": "video",
+      "width": 1280,
+      "height": 720,
+      "frame_count": 96,
+      "fps": 12.0,
+      "duration_seconds": 8.0
+    },
+    {
+      "path": "assets/media/hero-poster.jpg",
+      "kind": "image",
+      "width": 1280,
+      "height": 720
+    },
+    {
+      "path": "assets/docs/final-report.pdf",
+      "kind": "document",
+      "size_bytes": 1769053
+    }
+  ]
+}
