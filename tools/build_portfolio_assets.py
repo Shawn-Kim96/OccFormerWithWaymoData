@@ -114,6 +114,22 @@ def copy_image(src: Path, dest: Path) -> tuple[int, int]:
     return width, height
 
 
+def describe_video(path: Path) -> tuple[int, int, float]:
+    cap = cv2.VideoCapture(str(path))
+    if not cap.isOpened():
+        raise RuntimeError(f"Could not open video: {path}")
+    try:
+        fps = cap.get(cv2.CAP_PROP_FPS) or 0.0
+        frame_count = int(cap.get(cv2.CAP_PROP_FRAME_COUNT) or 0)
+        width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH) or 0)
+        height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT) or 0)
+        if frame_count <= 0 or fps <= 0 or width <= 0 or height <= 0:
+            raise RuntimeError(f"Video has invalid metadata: {path}")
+        return width, height, frame_count / fps
+    finally:
+        cap.release()
+
+
 def write_video_derivatives(src: Path, video_dest: Path, poster_dest: Path, filmstrip_dest: Path, *, target_width: int = 960) -> tuple[int, int, float]:
     ensure_dir(video_dest.parent)
     ensure_dir(poster_dest.parent)
@@ -313,16 +329,29 @@ def build_manifest(repo_root: Path, generated_dir: Path) -> dict:
         "per-class-baseline-fast.png",
     )
 
-    baseline_video = find_first(roots, "reports/baseline_fast_scene0.mp4")
     hero_video = generated_dir / "hero-baseline-fast.mp4"
     hero_poster = generated_dir / "hero-baseline-fast-poster.jpg"
     hero_strip = generated_dir / "hero-baseline-fast-filmstrip.jpg"
-    hero_width, hero_height, hero_duration = write_video_derivatives(
-        baseline_video,
-        hero_video,
-        hero_poster,
-        hero_strip,
-    )
+    try:
+        baseline_video = find_first(roots, "reports/baseline_fast_scene0.mp4")
+    except FileNotFoundError:
+        baseline_video = None
+
+    if baseline_video is not None:
+        hero_width, hero_height, hero_duration = write_video_derivatives(
+            baseline_video,
+            hero_video,
+            hero_poster,
+            hero_strip,
+        )
+        hero_source = "reports/baseline_fast_scene0.mp4"
+    else:
+        if not (hero_video.exists() and hero_poster.exists() and hero_strip.exists()):
+            raise FileNotFoundError(
+                "Missing reports/baseline_fast_scene0.mp4 and no committed fallback hero assets found under site/assets/generated/"
+            )
+        hero_width, hero_height, hero_duration = describe_video(hero_video)
+        hero_source = "site/assets/generated/hero-baseline-fast.mp4"
     assets.append(AssetRecord(
         id="hero-video",
         section="hero",
@@ -331,7 +360,7 @@ def build_manifest(repo_root: Path, generated_dir: Path) -> dict:
         title="Waymo occupancy demo",
         caption="A lightweight hero clip from the best completed baseline_fast run, used as the landing-page qualitative demo.",
         alt="Short hero video showing camera views and bird's-eye occupancy predictions for the Waymo baseline.",
-        source="reports/baseline_fast_scene0.mp4",
+        source=hero_source,
         width=hero_width,
         height=hero_height,
         duration_seconds=round(hero_duration, 2),
@@ -345,7 +374,7 @@ def build_manifest(repo_root: Path, generated_dir: Path) -> dict:
         title="Hero poster frame",
         caption="First decoded frame from the hero video for poster/fallback rendering.",
         alt="Poster frame extracted from the Waymo occupancy demo video.",
-        source="reports/baseline_fast_scene0.mp4",
+        source=hero_source,
         width=hero_width,
         height=hero_height,
         size_bytes=hero_poster.stat().st_size,
@@ -358,7 +387,7 @@ def build_manifest(repo_root: Path, generated_dir: Path) -> dict:
         title="Qualitative filmstrip",
         caption="Four evenly sampled frames to keep the qualitative story visible even before the video plays.",
         alt="Filmstrip with four frames from the baseline Waymo occupancy demo.",
-        source="reports/baseline_fast_scene0.mp4",
+        source=hero_source,
         width=1280,
         height=180,
         size_bytes=hero_strip.stat().st_size,
