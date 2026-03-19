@@ -7,6 +7,7 @@ import json
 import os
 import re
 import shutil
+import subprocess
 from dataclasses import asdict, dataclass
 from pathlib import Path
 from typing import Iterable
@@ -236,11 +237,11 @@ def plot_experiment_tradeoffs(summary_csv: Path, settings_csv: Path, out_path: P
 
 
 def parse_remote_url(repo_root: Path) -> str | None:
-    config_path = repo_root / ".git" / "config"
-    if not config_path.exists():
+    try:
+        remote = subprocess.run(["git", "remote", "get-url", "origin"], cwd=repo_root, check=True, capture_output=True, text=True).stdout.strip()
+    except Exception:
         return None
-    text = config_path.read_text(encoding="utf-8", errors="ignore")
-    match = re.search(r"url = (.+github\.com[:/](?P<owner>[^/]+)/(?P<repo>[^.\n]+)(?:\.git)?)", text)
+    match = re.search(r"github\.com[:/](?P<owner>[^/]+)/(?P<repo>[^.\n]+)(?:\.git)?$", remote)
     if not match:
         return None
     owner = match.group("owner")
@@ -449,6 +450,10 @@ def build_manifest(repo_root: Path, generated_dir: Path) -> dict:
         ),
     ]
 
+    report_pdf_src = report_root / "main.pdf"
+    report_pdf_dest = generated_dir / "final-report.pdf"
+    shutil.copy2(report_pdf_src, report_pdf_dest)
+
     summary_rows = read_csv_rows(report_root / "miou_summary.csv")
     ranking = [
         {"experiment": row["experiment"], "miou": float(row["mIoU"])}
@@ -463,7 +468,7 @@ def build_manifest(repo_root: Path, generated_dir: Path) -> dict:
             "abstract": ABSTRACT,
             "pages_url_guess": parse_remote_url(repo_root),
             "repo_url": "https://github.com/Shawn-Kim96/OccFormerWithWaymoData",
-            "report_url": "reports/final_report/main.pdf",
+            "report_url": report_pdf_dest.relative_to(repo_root).as_posix(),
             "report_source_url": "reports/final_report/main.tex",
             "metrics": {
                 "best_miou": 13.41,

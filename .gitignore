@@ -203,6 +203,20 @@ venv.bak/
 
 # mkdocs documentation
 /site
+!site/
+!site/index.html
+!site/styles.css
+!site/app.js
+!site/assets/
+!site/assets/generated/
+!site/assets/generated/**
+!site/
+!site/index.html
+!site/styles.css
+!site/app.js
+!site/assets/
+!site/assets/generated/
+!site/assets/generated/**
 
 # mypy
 .mypy_cache/
@@ -489,6 +503,13 @@ venv.bak/
 
 # mkdocs documentation
 /site
+!site/
+!site/index.html
+!site/styles.css
+!site/app.js
+!site/assets/
+!site/assets/generated/
+!site/assets/generated/**
 
 # mypy
 .mypy_cache/

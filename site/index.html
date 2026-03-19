@@ -1,0 +1,132 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>OccFormer + Waymo Portfolio</title>
+    <meta
+      name="description"
+      content="Static research-style portfolio page for the OccFormer Waymo occupancy adaptation."
+    />
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <header class="hero-shell">
+      <nav class="topbar">
+        <a class="brand" href="#top">OccFormer × Waymo</a>
+        <div class="nav-links">
+          <a href="#overview">Overview</a>
+          <a href="#method">Method</a>
+          <a href="#results">Results</a>
+          <a href="#engineering">Engineering</a>
+          <a href="#reproducibility">Reproducibility</a>
+        </div>
+      </nav>
+      <section class="hero" id="top">
+        <div class="hero-copy">
+          <p class="eyebrow">Portfolio page</p>
+          <h1 id="project-title">Loading…</h1>
+          <p class="subtitle" id="project-subtitle"></p>
+          <p class="abstract" id="project-abstract"></p>
+          <ul class="quick-stats" id="quick-stats"></ul>
+          <div class="hero-actions">
+            <a class="button primary" id="repo-link" href="#">Repository</a>
+            <a class="button" id="report-link" href="#">Final report</a>
+          </div>
+        </div>
+        <div class="hero-media" id="hero-media"></div>
+      </section>
+    </header>
+
+    <main>
+      <section class="content-block" id="overview">
+        <div class="section-heading">
+          <p class="eyebrow">Overview</p>
+          <h2>From report artifacts to a public systems story</h2>
+        </div>
+        <div class="two-column">
+          <div>
+            <p>
+              This page is built directly from repo evidence: report figures, CSV summaries, and demo media
+              already produced during the project. The goal is to present the real engineering work rather than
+              a generic project template.
+            </p>
+            <ul class="highlights" id="highlights"></ul>
+          </div>
+          <div class="overview-media" id="overview-media"></div>
+        </div>
+      </section>
+
+      <section class="content-block" id="method">
+        <div class="section-heading">
+          <p class="eyebrow">Method</p>
+          <h2>Adapt OccFormer, then make the training stack actually work on Waymo</h2>
+          <p>
+            The method section focuses on the actual repo work: data alignment, voxel-grid translation,
+            and stable end-to-end training/evaluation inside MMDetection3D.
+          </p>
+        </div>
+        <div class="asset-grid" id="method-assets"></div>
+      </section>
+
+      <section class="content-block" id="results">
+        <div class="section-heading">
+          <p class="eyebrow">Results</p>
+          <h2>Quantitative view of what completed successfully</h2>
+          <p>
+            The best fully completed run in this repo is <strong>baseline_fast</strong> at <strong>13.41 mIoU</strong>.
+            The visuals below summarize the most important report-backed metrics.
+          </p>
+        </div>
+        <div class="asset-grid" id="results-assets"></div>
+      </section>
+
+      <section class="content-block alt" id="engineering">
+        <div class="section-heading">
+          <p class="eyebrow">Engineering lessons</p>
+          <h2>The difficulty was integration and execution, not novelty theater</h2>
+        </div>
+        <div class="lessons-grid" id="lessons-grid"></div>
+      </section>
+
+      <section class="content-block" id="reproducibility">
+        <div class="section-heading">
+          <p class="eyebrow">Reproducibility</p>
+          <h2>Inspect the configs, figures, scripts, and generated manifest</h2>
+        </div>
+        <div class="two-column repro-grid">
+          <div>
+            <ol id="repro-steps"></ol>
+          </div>
+          <div class="link-card-list">
+            <a class="link-card" id="readme-link" href="#">
+              <strong>README</strong>
+              <span>Repo setup and usage notes</span>
+            </a>
+            <a class="link-card" id="report-card-link" href="#">
+              <strong>Final report PDF</strong>
+              <span>Full narrative, tables, and figures</span>
+            </a>
+            <a class="link-card" href="assets/generated/portfolio-manifest.json">
+              <strong>Asset manifest</strong>
+              <span>Section-to-asset mapping used by this site</span>
+            </a>
+            <a class="link-card" href="assets/generated/validation-report.md">
+              <strong>Validation report</strong>
+              <span>Machine and human-readable quality checks</span>
+            </a>
+          </div>
+        </div>
+      </section>
+    </main>
+
+    <footer class="footer">
+      <p>
+        Built from repo artifacts in <code>reports/</code>, <code>projects/configs/occformer_waymo/</code>, and
+        <code>tools/</code>. No frontend framework required.
+      </p>
+    </footer>
+
+    <script src="app.js"></script>
+  </body>
+</html>

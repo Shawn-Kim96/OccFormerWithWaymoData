@@ -1,0 +1,69 @@
+{
+  "passed": false,
+  "technical_threshold": {
+    "missing_required_assets": [],
+    "missing_required_sections": [],
+    "broken_local_refs": [
+      "assets/generated/validation-report.md"
+    ],
+    "asset_failures": [],
+    "deployed_failures": []
+  },
+  "quality_threshold": {
+    "composite_score": 85,
+    "categories": {
+      "clarity": 5,
+      "correctness": 2,
+      "coverage": 5,
+      "usefulness": 5
+    }
+  },
+  "asset_results": [
+    {
+      "id": "system-architecture",
+      "ok": true,
+      "detail": "3558x1382"
+    },
+    {
+      "id": "occformer-framework",
+      "ok": true,
+      "detail": "2234x857"
+    },
+    {
+      "id": "miou-experiments",
+      "ok": true,
+      "detail": "1600x800"
+    },
+    {
+      "id": "per-class-baseline",
+      "ok": true,
+      "detail": "2000x900"
+    },
+    {
+      "id": "hero-video",
+      "ok": true,
+      "detail": "960x608, 8.00s"
+    },
+    {
+      "id": "hero-poster",
+      "ok": true,
+      "detail": "960x608"
+    },
+    {
+      "id": "hero-filmstrip",
+      "ok": true,
+      "detail": "1280x180"
+    },
+    {
+      "id": "baseline-class-rankings",
+      "ok": true,
+      "detail": "1800x810"
+    },
+    {
+      "id": "experiment-tradeoffs",
+      "ok": true,
+      "detail": "1890x936"
+    }
+  ],
+  "deployed_checks": []
+}

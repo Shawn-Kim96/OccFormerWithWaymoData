@@ -1,0 +1,228 @@
+{
+  "project": {
+    "title": "Camera-only 3D Semantic Occupancy on Waymo with OccFormer",
+    "subtitle": "A reproducible Waymo adaptation of OccFormer covering dataset integration, training, evaluation, failure analysis, and qualitative occupancy demos.",
+    "abstract": "This project turns the public OccFormer codebase into a working Waymo occupancy pipeline inside MMDetection3D. The core work was systems integration: aligning Waymo KITTI-format sensor exports with Occ3D-Waymo labels, reconciling voxel-grid mismatches, fixing label semantics, and stabilizing training under a single 12 GB GPU budget.",
+    "pages_url_guess": "https://shawn-kim96.github.io/OccFormerWithWaymoData/",
+    "repo_url": "https://github.com/Shawn-Kim96/OccFormerWithWaymoData",
+    "report_url": "site/assets/generated/final-report.pdf",
+    "report_source_url": "reports/final_report/main.tex",
+    "metrics": {
+      "best_miou": 13.41,
+      "best_experiment": "baseline_fast",
+      "hero_duration_seconds": 8.0,
+      "hero_size_mb": 1.68,
+      "experiments_summarized": 4
+    }
+  },
+  "highlights": [
+    "Built a working Waymo occupancy pipeline inside MMDetection3D rather than changing the core architecture.",
+    "Documented the best completed validation score (13.41 mIoU) and the experiment trade-offs behind it.",
+    "Converted report artifacts into a lightweight static site and reproducible web asset bundle."
+  ],
+  "engineering_lessons": [
+    "Aligned Waymo image exports with Occ3D-Waymo occupancy labels and fixed the free-space label convention.",
+    "Bridged a GT voxel size mismatch (200\u00d7200\u00d716) against the default model grid (256\u00d7256\u00d732).",
+    "Stabilized training and evaluation in an HPC environment with tight memory and CUDA/toolchain constraints.",
+    "Tracked failed experiments and environment issues instead of hiding them, then folded those findings back into a reproducible baseline."
+  ],
+  "repro_steps": [
+    "Use the provided MMDetection3D + OccFormer configs under projects/configs/occformer_waymo/.",
+    "Inspect the final report and generated figures under reports/final_report/ for experiment rationale and metrics.",
+    "Run the portfolio asset build script to regenerate the web bundle and manifest from repository artifacts.",
+    "Use the GitHub Pages workflow to rebuild, validate, and publish the static site from the repo state."
+  ],
+  "experiment_ranking": [
+    {
+      "experiment": "baseline_fast",
+      "miou": 13.41
+    },
+    {
+      "experiment": "strong_aug",
+      "miou": 12.43
+    },
+    {
+      "experiment": "sgd",
+      "miou": 11.97
+    },
+    {
+      "experiment": "lr_5e4",
+      "miou": 7.29
+    }
+  ],
+  "sections": [
+    {
+      "id": "overview",
+      "eyebrow": "Overview",
+      "title": "What was built in this repo",
+      "body": "This repo is not just a paper reproduction. It contains the data plumbing, config work, training/evaluation scripts, analysis artifacts, and final reporting needed to make OccFormer run on Waymo occupancy data end to end.",
+      "asset_ids": [
+        "hero-filmstrip"
+      ]
+    },
+    {
+      "id": "method",
+      "eyebrow": "Method",
+      "title": "Adapt the model, then make the pipeline survive reality",
+      "body": "The project keeps OccFormer's camera-only 3D occupancy framing, then focuses on the hard systems work: aligning labels, bridging voxel-grid mismatches, and keeping MMDetection3D training/evaluation stable in an HPC setting.",
+      "asset_ids": [
+        "system-architecture",
+        "occformer-framework"
+      ]
+    },
+    {
+      "id": "results",
+      "eyebrow": "Results",
+      "title": "Quantitative evidence from the report and logs",
+      "body": "The best fully completed run in this repo is baseline_fast at 13.41 mIoU. The rest of the page keeps those results grounded in the report tables and generated figures.",
+      "asset_ids": [
+        "miou-experiments",
+        "per-class-baseline",
+        "baseline-class-rankings",
+        "experiment-tradeoffs"
+      ]
+    },
+    {
+      "id": "engineering",
+      "eyebrow": "Engineering lessons",
+      "title": "Most of the difficulty was integration, not architecture changes",
+      "body": "The repo documents concrete failures\u2014registry ordering issues, image loader mismatches, SLURM quirks, and GPU-memory limits\u2014so the page can show what was learned, not just the final score.",
+      "asset_ids": []
+    },
+    {
+      "id": "reproducibility",
+      "eyebrow": "Reproducibility",
+      "title": "Everything on this page traces back to repo evidence",
+      "body": "Every figure, metric, and media block is copied or derived from tracked report assets, CSV summaries, or demo videos already present in the repository.",
+      "asset_ids": []
+    }
+  ],
+  "assets": [
+    {
+      "id": "system-architecture",
+      "section": "method",
+      "kind": "image",
+      "src": "site/assets/generated/system-architecture.png",
+      "title": "System architecture",
+      "caption": "Pipeline view showing the repo's Waymo data flow, training stack, and evaluation path.",
+      "alt": "System architecture diagram for the OccFormer Waymo adaptation.",
+      "source": "reports/final_report/figures/system_architecture.png",
+      "width": 3558,
+      "height": 1382,
+      "duration_seconds": null,
+      "size_bytes": 740177
+    },
+    {
+      "id": "occformer-framework",
+      "section": "method",
+      "kind": "image",
+      "src": "site/assets/generated/occformer-framework.jpg",
+      "title": "OccFormer framework",
+      "caption": "Core model framing from the final report: lift image features to 3D, reason jointly, and decode occupancy masks.",
+      "alt": "OccFormer framework figure from the final report.",
+      "source": "reports/final_report/figures/occformer_framework.jpg",
+      "width": 2234,
+      "height": 857,
+      "duration_seconds": null,
+      "size_bytes": 1044940
+    },
+    {
+      "id": "miou-experiments",
+      "section": "results",
+      "kind": "image",
+      "src": "site/assets/generated/miou-by-experiment.png",
+      "title": "mIoU by experiment",
+      "caption": "Validation mIoU across the major Waymo experiment variants documented in the report.",
+      "alt": "Bar chart of validation mIoU by experiment.",
+      "source": "reports/final_report/figures/miou_by_experiment.png",
+      "width": 1600,
+      "height": 800,
+      "duration_seconds": null,
+      "size_bytes": 64325
+    },
+    {
+      "id": "per-class-baseline",
+      "section": "results",
+      "kind": "image",
+      "src": "site/assets/generated/per-class-baseline-fast.png",
+      "title": "Per-class IoU",
+      "caption": "Per-class IoU for the best completed baseline_fast run, highlighting strong road/free-space performance and weaker rare classes.",
+      "alt": "Per-class IoU chart for the baseline_fast experiment.",
+      "source": "reports/final_report/figures/per_class_baseline_fast.png",
+      "width": 2000,
+      "height": 900,
+      "duration_seconds": null,
+      "size_bytes": 122633
+    },
+    {
+      "id": "hero-video",
+      "section": "hero",
+      "kind": "video",
+      "src": "site/assets/generated/hero-baseline-fast.mp4",
+      "title": "Waymo occupancy demo",
+      "caption": "A lightweight hero clip from the best completed baseline_fast run, used as the landing-page qualitative demo.",
+      "alt": "Short hero video showing camera views and bird's-eye occupancy predictions for the Waymo baseline.",
+      "source": "reports/baseline_fast_scene0.mp4",
+      "width": 960,
+      "height": 608,
+      "duration_seconds": 8.0,
+      "size_bytes": 1757348
+    },
+    {
+      "id": "hero-poster",
+      "section": "hero",
+      "kind": "image",
+      "src": "site/assets/generated/hero-baseline-fast-poster.jpg",
+      "title": "Hero poster frame",
+      "caption": "First decoded frame from the hero video for poster/fallback rendering.",
+      "alt": "Poster frame extracted from the Waymo occupancy demo video.",
+      "source": "reports/baseline_fast_scene0.mp4",
+      "width": 960,
+      "height": 608,
+      "duration_seconds": null,
+      "size_bytes": 81399
+    },
+    {
+      "id": "hero-filmstrip",
+      "section": "qualitative",
+      "kind": "image",
+      "src": "site/assets/generated/hero-baseline-fast-filmstrip.jpg",
+      "title": "Qualitative filmstrip",
+      "caption": "Four evenly sampled frames to keep the qualitative story visible even before the video plays.",
+      "alt": "Filmstrip with four frames from the baseline Waymo occupancy demo.",
+      "source": "reports/baseline_fast_scene0.mp4",
+      "width": 1280,
+      "height": 180,
+      "duration_seconds": null,
+      "size_bytes": 54249
+    },
+    {
+      "id": "baseline-class-rankings",
+      "section": "results",
+      "kind": "image",
+      "src": "site/assets/generated/baseline-class-rankings.png",
+      "title": "Best recovered classes",
+      "caption": "Top per-class IoU values from baseline_fast, useful for reading where the model is currently strongest.",
+      "alt": "Bar chart ranking the strongest classes recovered by the baseline_fast model.",
+      "source": "reports/final_report/iou_result.csv",
+      "width": 1800,
+      "height": 810,
+      "duration_seconds": null,
+      "size_bytes": 60162
+    },
+    {
+      "id": "experiment-tradeoffs",
+      "section": "results",
+      "kind": "image",
+      "src": "site/assets/generated/experiment-tradeoffs.png",
+      "title": "Experiment trade-offs",
+      "caption": "The leaderboard pairs each experiment's mIoU with the backbone/loss combination that produced it.",
+      "alt": "Horizontal bar chart showing experiment leaderboard with backbone and loss annotations.",
+      "source": "reports/final_report/miou_summary.csv + reports/final_report/experiment_settings.csv",
+      "width": 1890,
+      "height": 936,
+      "duration_seconds": null,
+      "size_bytes": 45095
+    }
+  ]
+}
