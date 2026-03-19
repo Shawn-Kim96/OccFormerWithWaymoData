@@ -1,11 +1,11 @@
 # Portfolio Validation Report
 
-- Passed: YES
-- Composite score: 100/100
-- Category scores: {'clarity': 5, 'correctness': 5, 'coverage': 5, 'usefulness': 5}
+- Passed: NO
+- Composite score: 85/100
+- Category scores: {'clarity': 5, 'correctness': 2, 'coverage': 5, 'usefulness': 5}
 - Missing required assets: none
 - Missing required sections: none
-- Broken local refs: none
+- Broken local refs: ['assets/generated/validation-report.md']
 - Asset failures: none
 - Deployed failures: none
 
