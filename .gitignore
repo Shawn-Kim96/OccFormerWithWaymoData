@@ -502,14 +502,6 @@ venv.bak/
 .ropeproject
 
 # mkdocs documentation
-/site
-!site/
-!site/index.html
-!site/styles.css
-!site/app.js
-!site/assets/
-!site/assets/generated/
-!site/assets/generated/**
 
 # mypy
 .mypy_cache/
@@ -591,3 +583,7 @@ AMENT_IGNORE
 .ionide
 
 # End of https://www.toptal.com/developers/gitignore/api/ros2,linux,python,visualstudiocode,cuda,macos
+
+# Allow checked-in portfolio site assets
+!site/assets/data/
+!site/assets/data/**
