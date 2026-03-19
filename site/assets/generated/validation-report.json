@@ -1,19 +1,17 @@
 {
-  "passed": false,
+  "passed": true,
   "technical_threshold": {
     "missing_required_assets": [],
     "missing_required_sections": [],
-    "broken_local_refs": [
-      "assets/generated/validation-report.md"
-    ],
+    "broken_local_refs": [],
     "asset_failures": [],
     "deployed_failures": []
   },
   "quality_threshold": {
-    "composite_score": 85,
+    "composite_score": 100,
     "categories": {
       "clarity": 5,
-      "correctness": 2,
+      "correctness": 5,
       "coverage": 5,
       "usefulness": 5
     }

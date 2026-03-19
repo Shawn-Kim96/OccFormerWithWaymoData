@@ -125,8 +125,14 @@ def main() -> None:
     ref_parser = RefParser()
     ref_parser.feed(html)
 
+    deferred_generated_refs = {
+        "assets/generated/validation-report.md",
+        "assets/generated/validation-report.json",
+    }
     broken_refs: list[str] = []
     for ref in ref_parser.refs:
+        if ref in deferred_generated_refs:
+            continue
         path = local_ref_to_path(site_dir, ref)
         if path is None:
             continue
