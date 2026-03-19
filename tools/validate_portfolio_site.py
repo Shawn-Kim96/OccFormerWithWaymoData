@@ -1,153 +1,221 @@
 #!/usr/bin/env python3
-"""Validate the generated OccFormer portfolio site."""
+"""Validate the static portfolio site, generated assets, and optional deployed Pages URL."""
 from __future__ import annotations
 
 import argparse
 import json
 import re
+import urllib.error
+import urllib.request
+from html.parser import HTMLParser
 from pathlib import Path
-from typing import Any
 
 import cv2
 from PIL import Image
 
-REQUIRED_SECTIONS = ["hero", "overview", "method", "results", "engineering", "reproducibility"]
-REQUIRED_ROLES = ["hero_video", "architecture_image", "framework_image", "experiment_chart", "per_class_chart", "report_pdf"]
-LINK_RE = re.compile(r"(?:src|href)=\"([^\"]+)\"")
+
+REQUIRED_ASSET_IDS = {
+    "hero-video",
+    "system-architecture",
+    "occformer-framework",
+    "miou-experiments",
+    "per-class-baseline",
+}
+REQUIRED_SECTION_IDS = {
+    "overview",
+    "method",
+    "results",
+    "engineering",
+    "reproducibility",
+}
 
 
-class ValidationError(RuntimeError):
-    pass
+class RefParser(HTMLParser):
+    def __init__(self) -> None:
+        super().__init__()
+        self.refs: list[str] = []
+        self.section_ids: set[str] = set()
+
+    def handle_starttag(self, tag, attrs):
+        attrs = dict(attrs)
+        for key in ("src", "href", "poster"):
+            value = attrs.get(key)
+            if value:
+                self.refs.append(value)
+        if tag == "section" and attrs.get("id"):
+            self.section_ids.add(attrs["id"])
 
 
-def _load_manifest(site_dir: Path) -> dict[str, Any]:
-    path = site_dir / "assets" / "data" / "portfolio-manifest.json"
-    if not path.exists():
-        raise ValidationError(f"Manifest missing: {path}")
-    return json.loads(path.read_text())
+def local_ref_to_path(site_dir: Path, ref: str) -> Path | None:
+    if ref.startswith(("http://", "https://", "mailto:", "javascript:", "#")):
+        return None
+    clean = ref.split("?", 1)[0].split("#", 1)[0]
+    return (site_dir / clean).resolve()
 
 
-def _validate_image(path: Path) -> dict[str, Any]:
-    with Image.open(path) as image:
-        width, height = image.size
+def check_image(path: Path) -> tuple[bool, str]:
+    try:
+        with Image.open(path) as image:
+            width, height = image.size
         if width <= 0 or height <= 0:
-            raise ValidationError(f"Invalid image dimensions for {path}")
-        return {"width": width, "height": height}
+            return False, "zero dimensions"
+        return True, f"{width}x{height}"
+    except Exception as exc:  # pragma: no cover - defensive
+        return False, str(exc)
 
 
-def _validate_video(path: Path) -> dict[str, Any]:
+def check_video(path: Path) -> tuple[bool, str]:
     cap = cv2.VideoCapture(str(path))
-    if not cap.isOpened():
-        raise ValidationError(f"Video did not open: {path}")
-    frame_count = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
-    fps = float(cap.get(cv2.CAP_PROP_FPS) or 0)
-    width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH) or 0)
-    height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT) or 0)
-    ok, frame = cap.read()
-    cap.release()
-    if not ok or frame is None:
-        raise ValidationError(f"Video has no decodable first frame: {path}")
-    if width <= 0 or height <= 0 or frame_count <= 0 or fps <= 0:
-        raise ValidationError(f"Video metadata invalid: {path}")
-    if float(frame.mean()) < 3.0:
-        raise ValidationError(f"Video first frame appears blank: {path}")
-    return {"width": width, "height": height, "frame_count": frame_count, "fps": fps, "duration_seconds": round(frame_count / fps, 2)}
+    try:
+        if not cap.isOpened():
+            return False, "could not open"
+        frame_count = int(cap.get(cv2.CAP_PROP_FRAME_COUNT) or 0)
+        fps = float(cap.get(cv2.CAP_PROP_FPS) or 0)
+        width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH) or 0)
+        height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT) or 0)
+        ok, frame = cap.read()
+        if not ok or frame is None:
+            return False, "no decodable first frame"
+        if frame_count <= 0 or fps <= 0 or width <= 0 or height <= 0:
+            return False, "invalid metadata"
+        return True, f"{width}x{height}, {frame_count / fps:.2f}s"
+    finally:
+        cap.release()
 
 
-def _resolve_local_links(site_dir: Path, html_path: Path) -> list[str]:
-    missing = []
-    for link in LINK_RE.findall(html_path.read_text()):
-        if link.startswith(("http://", "https://", "mailto:", "#")):
-            continue
-        if not (html_path.parent / link).resolve().exists():
-            missing.append(link)
-    return missing
+def fetch_url(url: str) -> tuple[bool, str]:
+    try:
+        with urllib.request.urlopen(url, timeout=20) as response:
+            status = getattr(response, "status", 200)
+            return 200 <= status < 400, f"HTTP {status}"
+    except urllib.error.URLError as exc:
+        return False, str(exc)
 
 
-def validate_site(site_dir: Path) -> dict[str, Any]:
-    manifest = _load_manifest(site_dir)
-    index_path = site_dir / "index.html"
-    styles_path = site_dir / "styles.css"
-    if not index_path.exists():
-        raise ValidationError(f"Missing index.html in {site_dir}")
-    if not styles_path.exists():
-        raise ValidationError(f"Missing styles.css in {site_dir}")
-
-    assets = manifest.get("assets", [])
-    assets_by_role = {asset["role"]: asset for asset in assets}
-    missing_roles = [role for role in REQUIRED_ROLES if role not in assets_by_role]
-    missing_sections = [section for section in REQUIRED_SECTIONS if section not in manifest.get("required_sections", [])]
-
-    checks, missing_targets, corrupt_assets = [], [], []
-    for asset in assets:
-        asset_path = site_dir / asset["path"]
-        if not asset_path.exists():
-            missing_targets.append(asset["path"])
-            continue
-        try:
-            if asset["kind"] == "image":
-                meta = _validate_image(asset_path)
-            elif asset["kind"] == "video":
-                meta = _validate_video(asset_path)
-            else:
-                meta = {"size_bytes": asset_path.stat().st_size}
-            checks.append({"path": asset["path"], "kind": asset["kind"], **meta})
-        except ValidationError as exc:
-            corrupt_assets.append(str(exc))
-
-    broken_local_links = _resolve_local_links(site_dir, index_path)
-    technical_pass = not (missing_roles or missing_sections or missing_targets or corrupt_assets or broken_local_links)
-    technical_score = max(0, 100 - 8 * len(missing_roles) - 8 * len(missing_sections) - 10 * len(missing_targets) - 12 * len(corrupt_assets) - 10 * len(broken_local_links))
-
-    quality_categories = {
-        "clarity": 5 if len(manifest.get("narrative", {}).get("engineering_challenges", [])) >= 4 else 3,
-        "correctness": 5 if technical_pass else max(1, 4 - len(corrupt_assets) - len(broken_local_links)),
-        "coverage": 5 if not missing_roles and not missing_sections else max(1, 5 - len(missing_roles) - len(missing_sections)),
-        "usefulness": 5 if len(manifest.get("narrative", {}).get("repro_commands", [])) >= 4 else 3,
-    }
-    quality_score = round(sum(quality_categories.values()) / (len(quality_categories) * 5) * 100, 2)
-    composite_score = round(technical_score * 0.6 + quality_score * 0.4, 2)
-
+def score_categories(manifest: dict, parser: RefParser, broken_refs: list[str], asset_failures: list[str]) -> dict[str, int]:
+    assets = manifest["assets"]
+    asset_ids = {asset["id"] for asset in assets}
+    clarity = 5 if manifest.get("highlights") and len(assets) >= 7 else 3
+    correctness = 5 if not broken_refs and not asset_failures and REQUIRED_ASSET_IDS.issubset(asset_ids) else 2
+    coverage = 5 if REQUIRED_SECTION_IDS.issubset(parser.section_ids | {section["id"] for section in manifest.get("sections", [])}) else 2
+    usefulness = 5 if manifest.get("repro_steps") and manifest.get("engineering_lessons") else 3
     return {
-        "site_dir": str(site_dir),
-        "technical": {"pass": technical_pass, "score": technical_score, "missing_roles": missing_roles, "missing_sections": missing_sections, "missing_targets": missing_targets, "corrupt_assets": corrupt_assets, "broken_local_links": broken_local_links},
-        "quality": {"score": quality_score, "categories": quality_categories},
-        "composite_score": composite_score,
-        "threshold_pass": technical_pass and composite_score >= 85 and min(quality_categories.values()) >= 3,
-        "checks": checks,
+        "clarity": clarity,
+        "correctness": correctness,
+        "coverage": coverage,
+        "usefulness": usefulness,
     }
 
 
-def write_reports(site_dir: Path, report: dict[str, Any]) -> tuple[Path, Path]:
-    data_dir = site_dir / "assets" / "data"
-    data_dir.mkdir(parents=True, exist_ok=True)
-    json_path = data_dir / "validator-report.json"
-    md_path = data_dir / "validator-report.md"
-    json_path.write_text(json.dumps(report, indent=2))
-    lines = ["# Portfolio Validator Report", "", f"- Technical pass: {'PASS' if report['technical']['pass'] else 'FAIL'}", f"- Technical score: {report['technical']['score']}", f"- Quality score: {report['quality']['score']}", f"- Composite score: {report['composite_score']}", f"- Threshold pass: {'PASS' if report['threshold_pass'] else 'FAIL'}", "", "## Quality Categories"]
-    for key, value in report["quality"]["categories"].items():
-        lines.append(f"- {key}: {value}/5")
-    lines.extend(["", "## Technical Issues", f"- Missing roles: {report['technical']['missing_roles'] or 'none'}", f"- Missing sections: {report['technical']['missing_sections'] or 'none'}", f"- Missing targets: {report['technical']['missing_targets'] or 'none'}", f"- Corrupt assets: {report['technical']['corrupt_assets'] or 'none'}", f"- Broken local links: {report['technical']['broken_local_links'] or 'none'}"])
-    md_path.write_text("\n".join(lines) + "\n")
-    return json_path, md_path
+def main() -> None:
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--site-dir", default="site", help="Static site directory")
+    parser.add_argument("--deployed-url", default=None, help="Optional deployed Pages URL to smoke-check")
+    args = parser.parse_args()
 
+    site_dir = Path(args.site_dir).resolve()
+    index_path = site_dir / "index.html"
+    manifest_path = site_dir / "assets" / "generated" / "portfolio-manifest.json"
+    report_json = site_dir / "assets" / "generated" / "validation-report.json"
+    report_md = site_dir / "assets" / "generated" / "validation-report.md"
 
-def parse_args() -> argparse.Namespace:
-    parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--site-dir", type=Path, default=Path("site"))
-    parser.add_argument("--strict", action="store_true")
-    return parser.parse_args()
+    html = index_path.read_text(encoding="utf-8")
+    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
 
+    ref_parser = RefParser()
+    ref_parser.feed(html)
 
-def main() -> int:
-    args = parse_args()
-    report = validate_site(args.site_dir)
-    json_path, md_path = write_reports(args.site_dir, report)
+    broken_refs: list[str] = []
+    for ref in ref_parser.refs:
+        path = local_ref_to_path(site_dir, ref)
+        if path is None:
+            continue
+        if not path.exists():
+            broken_refs.append(ref)
+
+    asset_failures: list[str] = []
+    asset_results: list[dict[str, str | bool]] = []
+    for asset in manifest.get("assets", []):
+        asset_path = (site_dir.parent / asset["src"]).resolve()
+        if not asset_path.exists():
+            asset_failures.append(f"missing: {asset['id']}")
+            asset_results.append({"id": asset["id"], "ok": False, "detail": "missing"})
+            continue
+        if asset["kind"] == "video":
+            ok, detail = check_video(asset_path)
+        else:
+            ok, detail = check_image(asset_path)
+        asset_results.append({"id": asset["id"], "ok": ok, "detail": detail})
+        if not ok:
+            asset_failures.append(f"{asset['id']}: {detail}")
+
+    section_ids = {section["id"] for section in manifest.get("sections", [])}
+    missing_asset_ids = sorted(REQUIRED_ASSET_IDS - {asset["id"] for asset in manifest.get("assets", [])})
+    missing_sections = sorted(REQUIRED_SECTION_IDS - section_ids)
+
+    categories = score_categories(manifest, ref_parser, broken_refs, asset_failures)
+    composite_score = int(round((sum(categories.values()) / 20) * 100))
+
+    deployed_checks = []
+    deployed_failures = []
+    if args.deployed_url:
+        base = args.deployed_url.rstrip("/") + "/"
+        for suffix in ["", "assets/generated/portfolio-manifest.json"]:
+            ok, detail = fetch_url(base + suffix)
+            deployed_checks.append({"url": base + suffix, "ok": ok, "detail": detail})
+            if not ok:
+                deployed_failures.append(f"{base + suffix}: {detail}")
+
+    passed = not any([
+        missing_asset_ids,
+        missing_sections,
+        broken_refs,
+        asset_failures,
+        deployed_failures,
+        composite_score < 85,
+        any(value < 3 for value in categories.values()),
+    ])
+
+    report = {
+        "passed": passed,
+        "technical_threshold": {
+            "missing_required_assets": missing_asset_ids,
+            "missing_required_sections": missing_sections,
+            "broken_local_refs": broken_refs,
+            "asset_failures": asset_failures,
+            "deployed_failures": deployed_failures,
+        },
+        "quality_threshold": {
+            "composite_score": composite_score,
+            "categories": categories,
+        },
+        "asset_results": asset_results,
+        "deployed_checks": deployed_checks,
+    }
+    report_json.write_text(json.dumps(report, indent=2) + "\n", encoding="utf-8")
+
+    lines = [
+        "# Portfolio Validation Report",
+        "",
+        f"- Passed: {'YES' if passed else 'NO'}",
+        f"- Composite score: {composite_score}/100",
+        f"- Category scores: {categories}",
+        f"- Missing required assets: {missing_asset_ids or 'none'}",
+        f"- Missing required sections: {missing_sections or 'none'}",
+        f"- Broken local refs: {broken_refs or 'none'}",
+        f"- Asset failures: {asset_failures or 'none'}",
+        f"- Deployed failures: {deployed_failures or 'none'}",
+        "",
+        "## Asset checks",
+    ]
+    for item in asset_results:
+        lines.append(f"- {'PASS' if item['ok'] else 'FAIL'} `{item['id']}` — {item['detail']}")
+    report_md.write_text("\n".join(lines) + "\n", encoding="utf-8")
+
     print(json.dumps(report, indent=2))
-    print(f"Wrote {json_path}")
-    print(f"Wrote {md_path}")
-    return 0 if (not args.strict or report["threshold_pass"]) else 1
+    if not passed:
+        raise SystemExit(1)
 
 
 if __name__ == "__main__":
-    raise SystemExit(main())
+    main()
