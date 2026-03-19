@@ -1,137 +1,132 @@
 <!doctype html>
 <html lang="en">
-<head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>OccFormer on Waymo</title>
-  <meta name="description" content="This portfolio page condenses the repo&#x27;s report, configs, figures, and scripts into a single public-facing research case study with deterministic asset generation and static deployment." />
-  <link rel="stylesheet" href="styles.css" />
-</head>
-<body>
-  <header class="hero">
-    <div class="hero-copy">
-      <p class="eyebrow">Research portfolio · static GitHub Pages build</p>
-      <h1>OccFormer on Waymo</h1>
-      <p class="lede">Camera-only 3D semantic occupancy on Waymo, adapted from OccFormer and hardened into a reproducible MMDetection3D pipeline under a single 12 GB GPU budget.</p>
-      <p class="summary">This portfolio page condenses the repo&#x27;s report, configs, figures, and scripts into a single public-facing research case study with deterministic asset generation and static deployment.</p>
-      <div class="actions">
-        <a class="button primary" href="assets/docs/final-report.pdf">Read final report</a>
-        <a class="button" href="https://github.com/Shawn-Kim96/OccFormerWithWaymoData">Browse repository</a>
-        <a class="button" href="assets/data/portfolio-manifest.json">Download manifest</a>
-      </div>
-      <ul class="stats"><li><strong>13.41</strong><span>Best completed mIoU</span></li><li><strong>4</strong><span>Finished experiment variants</span></li><li><strong>5</strong><span>Camera views</span></li><li><strong>16</strong><span>Occupancy classes</span></li><li><strong>10%</strong><span>Training data fraction</span></li><li><strong>12 GB</strong><span>GPU budget</span></li></ul>
-    </div>
-    <div class="hero-media">
-      <video autoplay muted loop playsinline controls poster="assets/media/hero-poster.jpg">
-        <source src="assets/media/hero-reel.mp4" type="video/mp4" />
-      </video>
-      <p class="caption">A lightweight autoplay reel built from repo-backed report figures for GitHub Pages delivery.</p>
-    </div>
-  </header>
-
-  <main>
-    <section id="overview" class="panel">
-      <div class="section-heading">
-        <p class="eyebrow">Overview</p>
-        <h2>Why this project matters</h2>
-      </div>
-      <div class="two-col">
-        <p>The project turns a forked research codebase into a reproducible Waymo occupancy system. It packages the report&#x27;s architecture, quantitative results, and engineering lessons into a static artifact that is easy to share, validate, and host on GitHub Pages.</p>
-        <div class="source-list">
-          <h3>Grounded sources</h3>
-          <ul><li><code>reports/final_report/main.tex</code></li><li><code>projects/configs/occformer_waymo/experiments.py</code></li><li><code>projects/configs/occformer_waymo/waymo_base.py</code></li><li><code>reports/final_report/iou_result.csv</code></li></ul>
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>OccFormer + Waymo Portfolio</title>
+    <meta
+      name="description"
+      content="Static research-style portfolio page for the OccFormer Waymo occupancy adaptation."
+    />
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <header class="hero-shell">
+      <nav class="topbar">
+        <a class="brand" href="#top">OccFormer × Waymo</a>
+        <div class="nav-links">
+          <a href="#overview">Overview</a>
+          <a href="#method">Method</a>
+          <a href="#results">Results</a>
+          <a href="#engineering">Engineering</a>
+          <a href="#reproducibility">Reproducibility</a>
         </div>
-      </div>
-    </section>
-
-    <section id="method" class="panel">
-      <div class="section-heading">
-        <p class="eyebrow">Method</p>
-        <h2>OccFormer adapted to Waymo occupancy labels</h2>
-      </div>
-      <p>The system lifts five synchronized camera views into a voxel-aligned 3D representation, runs dual-path 3D reasoning, and predicts a 16-class occupancy grid over Waymo scenes.</p>
-      <div class="media-grid"><article class="media-card">
-  <img src="assets/media/system_architecture.png" alt="System architecture" loading="lazy" />
-  <div class="copy">
-    <h3>System architecture</h3>
-    <p>The repo&#x27;s pipeline spans data alignment, dataset hooks, training/evaluation, and artifact generation.</p>
-    <p><strong>Source:</strong> <code>reports/final_report/figures/system_architecture.png</code></p>
-  </div>
-</article><article class="media-card">
-  <img src="assets/media/occformer_framework.jpg" alt="OccFormer framework" loading="lazy" />
-  <div class="copy">
-    <h3>OccFormer framework</h3>
-    <p>OccFormer&#x27;s view transformation and 3D reasoning stack, reused as the backbone of the Waymo adaptation.</p>
-    <p><strong>Source:</strong> <code>reports/final_report/figures/occformer_framework.jpg</code></p>
-  </div>
-</article></div>
-    </section>
-
-    <section id="results" class="panel">
-      <div class="section-heading">
-        <p class="eyebrow">Results</p>
-        <h2>Quantitative signal from completed experiments</h2>
-      </div>
-      <p>The best completed baseline_fast run reached 13.41 mIoU on the validation split while operating on 10% data slices for practical iteration speed.</p>
-      <div class="media-grid"><article class="media-card">
-  <img src="assets/media/miou_by_experiment.png" alt="mIoU by experiment" loading="lazy" />
-  <div class="copy">
-    <h3>mIoU by experiment</h3>
-    <p>Completed runs show baseline_fast leading the available validation experiments.</p>
-    <p><strong>Source:</strong> <code>reports/final_report/figures/miou_by_experiment.png</code></p>
-  </div>
-</article><article class="media-card">
-  <img src="assets/media/per_class_all.png" alt="Per-class IoU across experiments" loading="lazy" />
-  <div class="copy">
-    <h3>Per-class IoU across experiments</h3>
-    <p>Cross-experiment comparison highlights class imbalance and geometry sensitivity.</p>
-    <p><strong>Source:</strong> <code>reports/final_report/figures/per_class_all.png</code></p>
-  </div>
-</article><article class="media-card">
-  <img src="assets/media/per_class_baseline_fast.png" alt="Per-class IoU for baseline_fast" loading="lazy" />
-  <div class="copy">
-    <h3>Per-class IoU for baseline_fast</h3>
-    <p>The strongest completed run still shows the typical occupancy gap between common and rare classes.</p>
-    <p><strong>Source:</strong> <code>reports/final_report/figures/per_class_baseline_fast.png</code></p>
-  </div>
-</article></div>
-      <div class="table-wrap"><table><thead><tr><th>Experiment</th><th>mIoU</th></tr></thead><tbody><tr><td>baseline_fast</td><td>13.41</td></tr><tr><td>strong_aug</td><td>12.43</td></tr><tr><td>sgd</td><td>11.97</td></tr><tr><td>lr_5e4</td><td>7.29</td></tr></tbody></table></div>
-    </section>
-
-    <section id="engineering" class="panel">
-      <div class="section-heading">
-        <p class="eyebrow">Engineering lessons</p>
-        <h2>What actually consumed the time</h2>
-      </div>
-      <p>Most of the work was systems integration: data alignment, label remapping, voxel-grid mismatch repair, memory pressure reduction, and workflow stabilization on HPC nodes.</p>
-      <div class="challenge-grid"><article class="challenge-card"><h3>Loader mismatch</h3><p>Swapped nuScenes-style assumptions for a Waymo/KITTI-compatible multiview loader so image tensors and metadata line up with the occupancy pipeline.</p></article><article class="challenge-card"><h3>Pose ordering</h3><p>Corrected a silent two-camera pose mismatch that otherwise corrupts feature lifting without always crashing training.</p></article><article class="challenge-card"><h3>Free-space labels</h3><p>Remapped Occ3D-Waymo free-space label 23 to the repo&#x27;s class index 15 so supervision and evaluation agree.</p></article><article class="challenge-card"><h3>Voxel grid alignment</h3><p>Handled 200×200×16 ground truth against 256×256×32 model outputs with explicit resizing safeguards for training and visualization.</p></article><article class="challenge-card"><h3>12 GB GPU ceiling</h3><p>Reduced query counts, used faster presets, and documented failure modes caused by large [B,Q,H,W,D] occupancy tensors.</p></article></div>
-    </section>
-
-    <section id="reproducibility" class="panel">
-      <div class="section-heading">
-        <p class="eyebrow">Reproducibility</p>
-        <h2>How to rebuild the artifacts</h2>
-      </div>
-      <div class="two-col">
-        <div>
-          <p>The site build is deterministic: report figures are promoted into the site bundle, the hero reel is generated from repo-backed images, and validation is performed from the emitted manifest.</p>
-          <pre><code>conda activate occformer307
-export PYTHONPATH=$(pwd):$PYTHONPATH
-sbatch scripts/run_experiment.sh baseline_fast
-python tools/test.py projects/configs/occformer_waymo/waymo_base.py results/baseline_fast/model/latest.pth --eval mIoU --launcher none
-python tools/build_portfolio_site.py --output-dir site
-python tools/validate_portfolio_site.py --site-dir site --strict</code></pre>
+      </nav>
+      <section class="hero" id="top">
+        <div class="hero-copy">
+          <p class="eyebrow">Portfolio page</p>
+          <h1 id="project-title">Loading…</h1>
+          <p class="subtitle" id="project-subtitle"></p>
+          <p class="abstract" id="project-abstract"></p>
+          <ul class="quick-stats" id="quick-stats"></ul>
+          <div class="hero-actions">
+            <a class="button primary" id="repo-link" href="#">Repository</a>
+            <a class="button" id="report-link" href="#">Final report</a>
+          </div>
         </div>
-        <div class="source-list">
-          <h3>Source-to-section matrix</h3>
-          <ul><li><strong>Hero:</strong> Derived reel from report figures and experiment metrics <br /><span>system_architecture, occformer_framework, miou_by_experiment, per_class_baseline_fast</span></li><li><strong>Method:</strong> System diagrams from final report <br /><span>system_architecture, occformer_framework</span></li><li><strong>Results:</strong> Evaluation charts regenerated from report assets <br /><span>miou_by_experiment, per_class_all, per_class_baseline_fast</span></li><li><strong>Reproducibility:</strong> Commands and links from report + repo <br /><span>report_pdf</span></li></ul>
-        </div>
-      </div>
-    </section>
-  </main>
+        <div class="hero-media" id="hero-media"></div>
+      </section>
+    </header>
 
-  <footer class="footer">
-    <p>Generated 2026-03-19T07:42:23.272913+00:00. This static site is built from repo artifacts under <code>reports/</code>, <code>projects/configs/</code>, and <code>tools/</code>.</p>
-  </footer>
-</body>
+    <main>
+      <section class="content-block" id="overview">
+        <div class="section-heading">
+          <p class="eyebrow">Overview</p>
+          <h2>From report artifacts to a public systems story</h2>
+        </div>
+        <div class="two-column">
+          <div>
+            <p>
+              This page is built directly from repo evidence: report figures, CSV summaries, and demo media
+              already produced during the project. The goal is to present the real engineering work rather than
+              a generic project template.
+            </p>
+            <ul class="highlights" id="highlights"></ul>
+          </div>
+          <div class="overview-media" id="overview-media"></div>
+        </div>
+      </section>
+
+      <section class="content-block" id="method">
+        <div class="section-heading">
+          <p class="eyebrow">Method</p>
+          <h2>Adapt OccFormer, then make the training stack actually work on Waymo</h2>
+          <p>
+            The method section focuses on the actual repo work: data alignment, voxel-grid translation,
+            and stable end-to-end training/evaluation inside MMDetection3D.
+          </p>
+        </div>
+        <div class="asset-grid" id="method-assets"></div>
+      </section>
+
+      <section class="content-block" id="results">
+        <div class="section-heading">
+          <p class="eyebrow">Results</p>
+          <h2>Quantitative view of what completed successfully</h2>
+          <p>
+            The best fully completed run in this repo is <strong>baseline_fast</strong> at <strong>13.41 mIoU</strong>.
+            The visuals below summarize the most important report-backed metrics.
+          </p>
+        </div>
+        <div class="asset-grid" id="results-assets"></div>
+      </section>
+
+      <section class="content-block alt" id="engineering">
+        <div class="section-heading">
+          <p class="eyebrow">Engineering lessons</p>
+          <h2>The difficulty was integration and execution, not novelty theater</h2>
+        </div>
+        <div class="lessons-grid" id="lessons-grid"></div>
+      </section>
+
+      <section class="content-block" id="reproducibility">
+        <div class="section-heading">
+          <p class="eyebrow">Reproducibility</p>
+          <h2>Inspect the configs, figures, scripts, and generated manifest</h2>
+        </div>
+        <div class="two-column repro-grid">
+          <div>
+            <ol id="repro-steps"></ol>
+          </div>
+          <div class="link-card-list">
+            <a class="link-card" id="readme-link" href="#">
+              <strong>README</strong>
+              <span>Repo setup and usage notes</span>
+            </a>
+            <a class="link-card" id="report-card-link" href="#">
+              <strong>Final report PDF</strong>
+              <span>Full narrative, tables, and figures</span>
+            </a>
+            <a class="link-card" href="assets/generated/portfolio-manifest.json">
+              <strong>Asset manifest</strong>
+              <span>Section-to-asset mapping used by this site</span>
+            </a>
+            <a class="link-card" href="assets/generated/validation-report.md">
+              <strong>Validation report</strong>
+              <span>Machine and human-readable quality checks</span>
+            </a>
+          </div>
+        </div>
+      </section>
+    </main>
+
+    <footer class="footer">
+      <p>
+        Built from repo artifacts in <code>reports/</code>, <code>projects/configs/occformer_waymo/</code>, and
+        <code>tools/</code>. No frontend framework required.
+      </p>
+    </footer>
+
+    <script src="app.js"></script>
+  </body>
 </html>
