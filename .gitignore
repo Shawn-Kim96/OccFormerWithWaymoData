@@ -202,21 +202,7 @@ venv.bak/
 .ropeproject
 
 # mkdocs documentation
-/site
-!site/
-!site/index.html
-!site/styles.css
-!site/app.js
-!site/assets/
-!site/assets/generated/
-!site/assets/generated/**
-!site/
-!site/index.html
-!site/styles.css
-!site/app.js
-!site/assets/
-!site/assets/generated/
-!site/assets/generated/**
+# /site is used for the generated portfolio page and is committed intentionally.
 
 # mypy
 .mypy_cache/
